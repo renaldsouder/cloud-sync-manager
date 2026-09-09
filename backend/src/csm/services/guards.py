@@ -19,8 +19,9 @@ de bloquer se prend ici, avant toute écriture.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from csm.rclone.adapter import RcloneAdapter, RcloneError
 
@@ -115,6 +116,22 @@ def evaluate_threshold(
     return None
 
 
+QUARANTINE_DIR_NAME = ".cloudsync-trash"
+STAMP_FORMAT = "%Y%m%d-%H%M%S"
+STAMP_PATTERN = re.compile(r"^\d{8}-\d{6}$")
+
+#: Motif d'exclusion à passer en même temps que ``--backup-dir``, sans quoi
+#: rclone refuse le chevauchement entre destination et corbeille.
+QUARANTINE_EXCLUDE = f"/{QUARANTINE_DIR_NAME}/**"
+
+
+def quarantine_root(destination: str) -> str:
+    """Dossier qui regroupe toutes les corbeilles d'une destination."""
+    base = destination.rstrip("/")
+    separator = "" if base.endswith(":") else "/"
+    return f"{base}{separator}{QUARANTINE_DIR_NAME}"
+
+
 def quarantine_directory(destination: str, when: datetime | None = None) -> str:
     """Emplacement de la corbeille pour cette exécution (CONF-004).
 
@@ -122,12 +139,59 @@ def quarantine_directory(destination: str, when: datetime | None = None) -> str:
     seule forme qui fonctionne aussi quand la destination est une racine, où
     il n'existe aucun dossier frère où se replier.
     """
-    stamp = (when or datetime.now(timezone.utc)).strftime("%Y%m%d-%H%M%S")
-    base = destination.rstrip("/")
-    separator = "" if base.endswith(":") else "/"
-    return f"{base}{separator}.cloudsync-trash/{stamp}"
+    stamp = (when or datetime.now(timezone.utc)).strftime(STAMP_FORMAT)
+    return f"{quarantine_root(destination)}/{stamp}"
 
 
-#: Motif d'exclusion à passer en même temps que ``--backup-dir``, sans quoi
-#: rclone refuse le chevauchement entre destination et corbeille.
-QUARANTINE_EXCLUDE = "/.cloudsync-trash/**"
+def parse_stamp(name: str) -> datetime | None:
+    """Date d'une corbeille, ou ``None`` si le nom n'est pas des nôtres."""
+    if not STAMP_PATTERN.match(name):
+        return None
+    try:
+        return datetime.strptime(name, STAMP_FORMAT).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def expired_batches(
+    names: list[str],
+    *,
+    now: datetime,
+    retention_days: int,
+    keep_last: int,
+) -> list[str]:
+    """Corbeilles à purger (§16 — aucune croissance illimitée).
+
+    Une corbeille n'est purgée que si elle est **à la fois** plus ancienne
+    que la rétention **et** hors des ``keep_last`` plus récentes : après une
+    erreur de configuration restée longtemps inaperçue, il doit rester
+    quelque chose à récupérer même si la rétention est passée.
+
+    Tout nom qui ne suit pas notre horodatage est ignoré : la purge ne doit
+    jamais toucher un dossier qu'elle n'a pas créé.
+    """
+    dated = [(name, parse_stamp(name)) for name in names]
+    ours = sorted(
+        ((name, stamp) for name, stamp in dated if stamp is not None),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    protected = {name for name, _ in ours[: max(keep_last, 0)]}
+    cutoff = now - timedelta(days=retention_days)
+    return [
+        name for name, stamp in ours if name not in protected and stamp < cutoff
+    ]
+
+
+def is_quarantine_path(path: str) -> bool:
+    """Vrai si ``path`` désigne une corbeille que nous avons créée.
+
+    La purge s'appuie dessus : elle supprime récursivement, et ne doit
+    accepter aucun chemin qui ne soit pas de cette forme exacte.
+    """
+    parts = path.rstrip("/").rsplit("/", 2)
+    if len(parts) < 2:
+        return False
+    return parts[-2].endswith(QUARANTINE_DIR_NAME) and bool(
+        STAMP_PATTERN.match(parts[-1])
+    )

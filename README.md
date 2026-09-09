@@ -70,6 +70,8 @@ Tout l'état persistant vit sous `/config` (appdata Unraid) : base SQLite,
 | `CSM_PORT` | `3572` | Port de la WebUI |
 | `CSM_ALLOWED_ROOTS` | `/mnt/user` | Racines locales autorisées, séparées par des virgules |
 | `CSM_WEB_DIR` | `/app/web` | Build du frontend servi par l'API |
+| `CSM_QUARANTINE_RETENTION_DAYS` | `30` | Âge au-delà duquel une corbeille est purgée |
+| `CSM_QUARANTINE_KEEP_RUNS` | `3` | Corbeilles toujours conservées, quel que soit leur âge |
 | `PUID` / `PGID` | `99` / `100` | Identité des fichiers écrits (`nobody:users`) |
 | `UMASK` | `000` | Droits des fichiers écrits |
 
@@ -84,7 +86,8 @@ Tout l'état persistant vit sous `/config` (appdata Unraid) : base SQLite,
 - Source vide ou inaccessible : la tâche échoue **sans propager de suppression**.
 - Au-delà du seuil configuré, la tâche passe « Bloquée » et attend une
   validation explicite qui nomme le nombre exact de fichiers concernés.
-- Les suppressions sont des déplacements vers `.cloudsync-trash` : réversibles.
+- Les suppressions sont des déplacements vers `.cloudsync-trash` : réversibles,
+  et purgées selon une rétention configurable pour ne pas remplir le share.
 
 ## Licence
 

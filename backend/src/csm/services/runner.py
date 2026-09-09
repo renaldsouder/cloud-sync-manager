@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from csm.db.models import Remote, Task, TaskEvent, TaskRun, new_id
 from csm.rclone import events as rclone_events
-from csm.rclone.adapter import RcloneAdapter
+from csm.rclone.adapter import RcloneAdapter, RcloneError
 from csm.rclone.events import RcloneEvent
 from csm.services import guards
 from csm.services.guards import DeletionPlan, GuardBlocked
@@ -142,9 +142,18 @@ def requires_dry_run(task: Task) -> bool:
 class RunManager:
     """Registre des exécutions en cours."""
 
-    def __init__(self, session_factory: sessionmaker[Session], adapter: RcloneAdapter) -> None:
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        adapter: RcloneAdapter,
+        *,
+        quarantine_retention_days: int = 30,
+        quarantine_keep_runs: int = 3,
+    ) -> None:
         self._session_factory = session_factory
         self._adapter = adapter
+        self._retention_days = quarantine_retention_days
+        self._keep_runs = quarantine_keep_runs
         self._runs: dict[str, LiveRun] = {}
         self._lock = threading.Lock()
 
@@ -308,6 +317,11 @@ class RunManager:
             live.phase = "transfert"
             exit_code = self._pump(live, session, self._arguments(live, plan))
             self._finalise(live, exit_code, session)
+
+            if plan.destructive and live.status in {"success", "warning"}:
+                live.phase = "purge de la quarantaine"
+                self._purge_quarantine(live, plan, session)
+
             session.commit()
         except Exception:  # pragma: no cover - filet de sécurité du fil
             logger.exception("exécution %s interrompue par une erreur interne", live.run_id)
@@ -469,6 +483,52 @@ class RunManager:
                     )
                 )
         return stored
+
+    def _purge_quarantine(self, live: LiveRun, plan: RunPlan, session: Session) -> None:
+        """Applique la rétention aux corbeilles (§16 — pas de croissance illimitée).
+
+        Sans cela, un Miroir actif finirait par remplir la destination avec
+        ses propres sauvegardes, ce qui transformerait une protection en
+        panne de stockage.
+        """
+        root = guards.quarantine_root(plan.destination)
+        try:
+            entries = self._adapter.lsjson(root, dirs_only=True, max_depth=1)
+        except RcloneError:
+            return  # aucune corbeille à cet endroit : rien à purger
+
+        expired = guards.expired_batches(
+            [str(entry.get("Name", "")) for entry in entries],
+            now=datetime.now(timezone.utc),
+            retention_days=self._retention_days,
+            keep_last=self._keep_runs,
+        )
+
+        purged = 0
+        for name in expired:
+            path = f"{root}/{name}"
+            # Ceinture et bretelles : purge supprime récursivement, elle ne
+            # doit jamais recevoir autre chose qu'une corbeille à nous.
+            if not guards.is_quarantine_path(path):
+                logger.warning("purge refusée pour un chemin inattendu : %s", path)
+                continue
+            try:
+                self._adapter.purge(path)
+                purged += 1
+            except RcloneError as exc:
+                logger.warning("purge de %s impossible : %s", path, exc)
+
+        if purged:
+            session.add(
+                TaskEvent(
+                    run_id=live.run_id,
+                    kind="warning",
+                    message=(
+                        f"{purged} corbeille(s) de plus de {self._retention_days} "
+                        "jours purgée(s)"
+                    ),
+                )
+            )
 
     # -- clôture ------------------------------------------------------------
 

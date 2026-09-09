@@ -56,7 +56,12 @@ def _build_run_manager(app: FastAPI, settings: Settings) -> RunManager | None:
         logger.warning("rclone introuvable : les exécutions sont désactivées")
         return None
     adapter.config_password = settings.rclone_config_password
-    return RunManager(app.state.session_factory, adapter)
+    return RunManager(
+        app.state.session_factory,
+        adapter,
+        quarantine_retention_days=settings.quarantine_retention_days,
+        quarantine_keep_runs=settings.quarantine_keep_runs,
+    )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

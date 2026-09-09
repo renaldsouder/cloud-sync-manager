@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     #: ce qui est le comportement par défaut décrit au §6.1.
     rclone_config_password: str | None = None
 
+    #: Rétention de la quarantaine (§16, CONF-004). Une corbeille n'est
+    #: purgée que si elle dépasse cette ancienneté **et** n'est pas parmi les
+    #: dernières conservées.
+    quarantine_retention_days: int = 30
+    quarantine_keep_runs: int = 3
+
     log_level: str = "INFO"
 
     @property

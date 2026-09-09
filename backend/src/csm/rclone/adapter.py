@@ -256,6 +256,15 @@ class RcloneAdapter:
         except FileNotFoundError as exc:
             raise RcloneUnavailable(f"binaire rclone introuvable : {self.binary}") from exc
 
+    def purge(self, path: str, timeout: float = DEFAULT_TIMEOUT) -> None:
+        """Supprime récursivement un dossier.
+
+        Opération irréversible : le seul appelant est la purge de quarantaine,
+        qui vérifie la forme du chemin avant d'arriver ici (voir
+        ``guards.is_quarantine_path``).
+        """
+        self._run_checked(["purge", path], timeout=timeout)
+
     def about(self, remote: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | None:
         """Quotas du stockage. ``None`` si le backend ne sait pas répondre.
 
