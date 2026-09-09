@@ -66,7 +66,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 LABEL org.opencontainers.image.title="Cloud Sync Manager" \
       org.opencontainers.image.description="Synchronisation Cloud pour Unraid, moteur rclone" \
-      org.opencontainers.image.version="0.2.0" \
+      org.opencontainers.image.version="0.2.1" \
       org.opencontainers.image.licenses="GPL-3.0-or-later"
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

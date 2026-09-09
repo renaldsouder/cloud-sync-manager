@@ -246,7 +246,7 @@ masquage centralisé.
 toute personne pouvant joindre le port sur votre réseau peut créer une tâche
 et déclencher des suppressions. C'est le défaut retenu pour ne pas verrouiller
 les installations existantes lors d'une mise à jour, mais l'application vous le
-signale tant que ce n'est pas fait.
+signale par un bandeau visible sur chaque écran tant que ce n'est pas fait.
 
 **Paramètres → Accès à l'interface**, choisissez un mot de passe d'au moins
 huit caractères. Vous restez connecté ensuite ; cochez « rester connecté » pour

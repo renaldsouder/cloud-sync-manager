@@ -730,3 +730,29 @@ body {
 .shell {
   position: relative;
 }
+
+/* --- Avertissement permanent --------------------------------------------- */
+
+.warning {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--ko);
+  border-left-width: 3px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.warning span {
+  flex: 1;
+  min-width: 260px;
+  color: var(--ink-soft);
+}
+
+.warning strong {
+  color: var(--ink);
+}

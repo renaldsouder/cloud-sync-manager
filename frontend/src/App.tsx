@@ -36,9 +36,11 @@ export default function App() {
     }
   }, []);
 
+  // Relu à chaque changement d'onglet : poser un mot de passe depuis les
+  // paramètres doit faire disparaître l'avertissement sans recharger la page.
   useEffect(() => {
     void refreshAuth();
-  }, [refreshAuth]);
+  }, [refreshAuth, tab]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -97,6 +99,19 @@ export default function App() {
           </button>
         )}
       </header>
+
+      {!auth.enabled && tab !== "parametres" && (
+        <div className="warning">
+          <span>
+            <strong>Cette interface n'est protégée par aucun mot de passe.</strong>{" "}
+            Toute personne pouvant joindre ce port sur votre réseau peut créer une
+            tâche et déclencher des suppressions.
+          </span>
+          <button type="button" className="btn btn--small" onClick={() => setTab("parametres")}>
+            Protéger l'interface
+          </button>
+        </div>
+      )}
 
       {tab === "bord" ? (
         <DashboardView />

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cloud-sync-manager"
-version = "0.2.0"
+version = "0.2.1"
 description = "Synchronisation Cloud pour Unraid — moteur rclone, WebUI, planification"
 requires-python = ">=3.13"
 dependencies = [
