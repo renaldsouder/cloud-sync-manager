@@ -250,3 +250,23 @@ def test_performance_settings_reach_rclone(
 
     run = wait_for(client, start(client, task["id"], dry_run=False))
     assert run["status"] == "success", run
+
+
+@pytest.mark.usefixtures("rclone_path")
+def test_advanced_options_are_reachable(client: TestClient) -> None:
+    """CLOUD-003 — sans elles, OneDrive est impossible à configurer.
+
+    rclone range `token`, `drive_id` et `drive_type` parmi les options
+    avancées. L'assistant doit pouvoir les demander, sinon les trois
+    fournisseurs OAuth restent hors d'atteinte.
+    """
+    courantes = client.get("/api/providers").json()
+    onedrive = next(p for p in courantes if p["name"] == "onedrive")
+    assert "token" not in {o["name"] for o in onedrive["options"]}
+
+    avancees = client.get(
+        "/api/providers", params={"include_advanced": True}
+    ).json()
+    onedrive = next(p for p in avancees if p["name"] == "onedrive")
+    noms = {o["name"] for o in onedrive["options"]}
+    assert {"token", "drive_id", "drive_type"} <= noms

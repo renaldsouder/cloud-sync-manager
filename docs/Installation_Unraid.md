@@ -53,8 +53,15 @@ peut pas mener depuis un conteneur sans interface. La marche à suivre :
    ```
 
 3. Votre navigateur s'ouvre, vous autorisez l'accès.
-4. Copiez le jeton rendu par la commande et collez-le dans le champ `token`
-   de l'assistant.
+4. Dans l'assistant, cochez **« Afficher les options avancées »** : rclone
+   range `token` parmi celles-ci, il n'apparaît pas autrement.
+5. Collez le jeton rendu par la commande dans le champ `token`.
+
+**OneDrive demande deux champs de plus** : `drive_id` et `drive_type`
+(`personal`, `business` ou `documentLibrary`). Le plus simple est de créer le
+remote une fois sur votre ordinateur avec `rclone config`, puis de recopier les
+trois valeurs depuis le fichier `rclone.conf` qu'il produit — il se trouve dans
+`%APPDATA%clone\` sous Windows.
 
 Le jeton est écrit directement dans le `rclone.conf` du conteneur. Il n'est
 jamais réaffiché ensuite, ni inclus dans une sauvegarde de configuration.

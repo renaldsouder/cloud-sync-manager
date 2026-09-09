@@ -16,7 +16,11 @@ type Props = {
 export default function RemoteWizard({ onCreated, onCancel }: Props) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [includeAll, setIncludeAll] = useState(false);
-  const [chosen, setChosen] = useState<Provider | null>(null);
+  // Les fournisseurs OAuth — Drive, OneDrive, Dropbox — rangent `token`,
+  // `drive_id` et `drive_type` parmi les options avancées de rclone. Sans
+  // ce commutateur, ils sont impossibles à configurer.
+  const [advanced, setAdvanced] = useState(false);
+  const [chosenName, setChosenName] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +28,7 @@ export default function RemoteWizard({ onCreated, onCancel }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchProviders(includeAll, controller.signal)
+    fetchProviders(includeAll, advanced, controller.signal)
       .then(setProviders)
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
@@ -32,7 +36,11 @@ export default function RemoteWizard({ onCreated, onCancel }: Props) {
         }
       });
     return () => controller.abort();
-  }, [includeAll]);
+  }, [includeAll, advanced]);
+
+  // Dérivé de la liste plutôt que mémorisé : basculer les options avancées
+  // recharge le catalogue, et le fournisseur choisi doit suivre.
+  const chosen = providers.find((provider) => provider.name === chosenName) ?? null;
 
   const missing = useMemo(
     () =>
@@ -77,7 +85,7 @@ export default function RemoteWizard({ onCreated, onCancel }: Props) {
                 type="button"
                 className="provider"
                 onClick={() => {
-                  setChosen(provider);
+                  setChosenName(provider.name);
                   setName(provider.label);
                 }}
               >
@@ -106,7 +114,7 @@ export default function RemoteWizard({ onCreated, onCancel }: Props) {
     <section className="card">
       <div className="card__head">
         <h2>{chosen.label}</h2>
-        <button type="button" className="btn btn--ghost" onClick={() => setChosen(null)}>
+        <button type="button" className="btn btn--ghost" onClick={() => setChosenName(null)}>
           Changer de fournisseur
         </button>
       </div>
@@ -119,6 +127,17 @@ export default function RemoteWizard({ onCreated, onCancel }: Props) {
             Unraid — puis collez le jeton obtenu dans le champ <code>token</code> :
           </p>
           <pre>rclone authorize "{chosen.name}"</pre>
+          <p>
+            Cochez ensuite « afficher les options avancées » ci-dessous pour faire
+            apparaître le champ <code>token</code>.
+            {chosen.name === "onedrive" && (
+              <>
+                {" "}
+                OneDrive demande aussi <code>drive_id</code> et{" "}
+                <code>drive_type</code>, que la commande affiche.
+              </>
+            )}
+          </p>
         </div>
       )}
 
@@ -132,6 +151,16 @@ export default function RemoteWizard({ onCreated, onCancel }: Props) {
         <span className="field__help">
           Nom affiché dans l'application. Vous pourrez le modifier plus tard.
         </span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
+          checked={advanced}
+          onChange={(event) => setAdvanced(event.target.checked)}
+        />
+        Afficher les options avancées. Nécessaire pour Google Drive, OneDrive et
+        Dropbox, dont le champ <code>token</code> en fait partie.
       </label>
 
       {chosen.options.map((option) => (

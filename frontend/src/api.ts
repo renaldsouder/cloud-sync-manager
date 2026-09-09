@@ -79,8 +79,15 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const fetchHealth = (signal?: AbortSignal) =>
   request<Health>("/api/health", { signal });
 
-export const fetchProviders = (includeAll: boolean, signal?: AbortSignal) =>
-  request<Provider[]>(`/api/providers?include_all=${includeAll}`, { signal });
+export const fetchProviders = (
+  includeAll: boolean,
+  includeAdvanced = false,
+  signal?: AbortSignal,
+) =>
+  request<Provider[]>(
+    `/api/providers?include_all=${includeAll}&include_advanced=${includeAdvanced}`,
+    { signal },
+  );
 
 export const fetchRemotes = (signal?: AbortSignal) =>
   request<Remote[]>("/api/remotes", { signal });
