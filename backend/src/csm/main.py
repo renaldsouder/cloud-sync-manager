@@ -23,7 +23,7 @@ from csm.config import Settings, get_settings
 from csm.db import create_db_engine, create_session_factory, sqlite_url
 from csm.db.migrate import upgrade_to_head
 from csm.rclone.adapter import RcloneAdapter, RcloneUnavailable
-from csm.services.runner import RunManager
+from csm.services.runner import RunManager, mark_orphan_runs_interrupted
 
 logger = logging.getLogger("csm")
 
@@ -75,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = settings
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
+        mark_orphan_runs_interrupted(app.state.session_factory)
         app.state.run_manager = _build_run_manager(app, settings)
         logger.info("Cloud Sync Manager %s prêt sur %s", __version__, settings.config_dir)
         try:

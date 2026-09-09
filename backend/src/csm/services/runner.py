@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from csm.db.models import Remote, Task, TaskEvent, TaskRun, new_id
@@ -173,6 +174,16 @@ class RunManager:
                 run.task_id == task_id and run.status == "running"
                 for run in self._runs.values()
             )
+
+    def _forget(self, run_id: str) -> None:
+        """Retire une exécution terminée du registre.
+
+        Sans cela, le registre grossit indéfiniment (§13) et — plus visible —
+        une tâche terminée continue d'être annoncée « en cours » par le flux
+        de progression, avec un bouton « Arrêter » qui ne sert plus à rien.
+        """
+        with self._lock:
+            self._runs.pop(run_id, None)
 
     def live_runs(self) -> list[LiveRun]:
         with self._lock:
@@ -329,6 +340,7 @@ class RunManager:
             live.status = "error"
         finally:
             session.close()
+            self._forget(live.run_id)
 
     def _arguments(self, live: LiveRun, plan: RunPlan) -> list[str]:
         backup_dir: str | None = None
@@ -606,6 +618,36 @@ class RunManager:
                 # destructive est consommée dès qu'elle a réussi.
                 if live.dry_run and status == "success":
                     task.dry_run_required = False
+
+
+def mark_orphan_runs_interrupted(session_factory: sessionmaker[Session]) -> int:
+    """Rattrape les exécutions coupées par un arrêt du conteneur (§8.5).
+
+    Sans ce passage au démarrage, une exécution tuée en vol resterait
+    « en cours » pour toujours : son statut ne serait jamais conclu, et la
+    tâche refuserait tout nouveau lancement. Le §8.5 est formel — après un
+    arrêt forcé ou un plantage, une exécution est « interrompue », jamais
+    « réussie ».
+    """
+    session = session_factory()
+    try:
+        orphans = list(
+            session.scalars(select(TaskRun).where(TaskRun.status == "running")).all()
+        )
+        for run in orphans:
+            run.status = "interrupted"
+            run.ended_at = run.ended_at or datetime.now(timezone.utc)
+            task = session.get(Task, run.task_id)
+            if task is not None and task.status == "running":
+                task.status = "ready"
+        if orphans:
+            logger.warning(
+                "%d exécution(s) interrompue(s) par un arrêt précédent", len(orphans)
+            )
+            session.commit()
+        return len(orphans)
+    finally:
+        session.close()
 
 
 def _terminate(process: subprocess.Popen[str], grace: float) -> bool:

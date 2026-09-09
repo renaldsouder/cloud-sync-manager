@@ -141,7 +141,9 @@ export default function TasksView() {
                   {running
                     ? running.dry_run
                       ? "Simulation en cours"
-                      : "En cours"
+                      : running.phase === "transfert"
+                        ? "En cours"
+                        : running.phase
                     : (STATUS_LABEL[task.status] ?? task.status)}
                 </span>
               </div>
@@ -255,6 +257,7 @@ function Progress({ run }: { run: LiveRun }) {
         />
       </div>
       <p className="progress__detail">
+        {run.phase !== "transfert" && <>{run.phase} · </>}
         {percent !== null && <>{percent} % · </>}
         {formatBytes(done)}
         {total > 0 && <> / {formatBytes(total)}</>}

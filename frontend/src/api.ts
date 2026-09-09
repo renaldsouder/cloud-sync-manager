@@ -103,6 +103,8 @@ export type LiveRun = {
   task_name: string;
   dry_run: boolean;
   status: string;
+  /** Étape en cours : contrôle de la source, simulation, transfert, purge. */
+  phase: string;
   current_file: string | null;
   counters: { transfers: number; deletes: number; errors: number };
   stats: {
@@ -115,6 +117,13 @@ export type LiveRun = {
     errors?: number;
   };
   last_error: string | null;
+  blocked_reason: string | null;
+  deletion_plan: {
+    deletes: number;
+    checks: number;
+    percent: number;
+    paths: string[];
+  } | null;
 };
 
 export type Task = {
@@ -131,6 +140,7 @@ export type Task = {
   enabled: boolean;
   status: string;
   last_run_id: string | null;
+  next_run_at: string | null;
   live: LiveRun | null;
 };
 
