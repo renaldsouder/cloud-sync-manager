@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import OAuthPanel from "./OAuthPanel";
 import { createRemote, fetchProviders, type Provider } from "./api";
 
 type Props = {
@@ -120,25 +121,17 @@ export default function RemoteWizard({ onCreated, onCancel }: Props) {
       </div>
 
       {chosen.needs_oauth && (
-        <div className="notice">
-          <strong>Ce fournisseur demande une autorisation par navigateur.</strong>
-          <p>
-            Lancez cette commande <em>sur votre ordinateur</em> — pas sur le serveur
-            Unraid — puis collez le jeton obtenu dans le champ <code>token</code> :
-          </p>
-          <pre>rclone authorize "{chosen.name}"</pre>
-          <p>
-            Cochez ensuite « afficher les options avancées » ci-dessous pour faire
-            apparaître le champ <code>token</code>.
-            {chosen.name === "onedrive" && (
-              <>
-                {" "}
-                OneDrive demande aussi <code>drive_id</code> et{" "}
-                <code>drive_type</code>, que la commande affiche.
-              </>
-            )}
-          </p>
-        </div>
+        <OAuthPanel
+          provider={chosen.name}
+          label={chosen.label}
+          onAuthorized={(options) => {
+            // Le jeton et, pour OneDrive, l'identifiant du disque sont
+            // remplis d'office : ce sont précisément les champs que
+            // l'utilisateur ne peut pas connaître.
+            setValues((previous) => ({ ...previous, ...options }));
+            setAdvanced(true);
+          }}
+        />
       )}
 
       <label className="field">

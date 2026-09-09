@@ -21,6 +21,7 @@ from starlette import status
 from csm import __version__
 from csm.api import auth as auth_api
 from csm.api import config as config_api
+from csm.api import oauth as oauth_api
 from csm.api import dashboard, health, remotes, tasks
 from csm.config import Settings, get_settings
 from csm.db import create_db_engine, create_session_factory, sqlite_url
@@ -179,6 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tasks.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
     app.include_router(config_api.router, prefix="/api")
+    app.include_router(oauth_api.router, prefix="/api")
 
     if settings.web_dir.is_dir():
         # html=True sert index.html à la racine. Le repli SPA sur les routes

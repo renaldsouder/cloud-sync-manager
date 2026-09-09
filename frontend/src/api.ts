@@ -384,3 +384,21 @@ export const setPassword = (body: {
   method: "PUT",
   body: JSON.stringify(body),
 });
+
+export const startOAuth = (provider: string) =>
+  request<{ session_id: string; auth_url: string; instructions: string }>(
+    "/api/oauth/start",
+    { method: "POST", body: JSON.stringify({ provider }) },
+  );
+
+export const completeOAuth = (sessionId: string, redirectUrl: string) =>
+  request<{ options: Record<string, string>; warning?: string }>(
+    "/api/oauth/complete",
+    {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, redirect_url: redirectUrl }),
+    },
+  );
+
+export const cancelOAuth = () =>
+  request<void>("/api/oauth/cancel", { method: "POST" });

@@ -34,6 +34,10 @@
           Description="Port de l'interface Web."
           Type="Port" Display="always" Required="true" Mask="false">3572</Config>
 
+  <Config Name="Autorisation OAuth" Target="53682" Default="53682" Mode="tcp"
+          Description="Port utilisé le temps d'autoriser Google Drive, OneDrive ou Dropbox depuis l'interface. Sans lui, ces trois fournisseurs demandent une manipulation en ligne de commande."
+          Type="Port" Display="always" Required="false" Mask="false">53682</Config>
+
   <Config Name="Appdata" Target="/config" Default="/mnt/user/appdata/cloud-sync-manager" Mode="rw"
           Description="Configuration, base de données, journaux et fichier rclone.conf. À sauvegarder avant toute mise à jour majeure."
           Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/cloud-sync-manager</Config>

@@ -41,27 +41,22 @@ Rien d'autre à faire.
 
 ### Google Drive, OneDrive, Dropbox
 
-Ces trois fournisseurs exigent une autorisation par navigateur, que rclone ne
-peut pas mener depuis un conteneur sans interface. La marche à suivre :
+Ces trois fournisseurs exigent une autorisation par navigateur. Elle se
+conduit depuis l'interface, sans installer quoi que ce soit :
 
-1. Installez rclone **sur votre ordinateur** — pas sur le serveur Unraid :
-   <https://rclone.org/downloads/>
-2. Lancez la commande affichée par l'assistant, par exemple :
+1. Choisissez le fournisseur, puis **Autoriser l'accès**.
+2. Un onglet s'ouvre sur la page de connexion. Identifiez-vous et acceptez.
+3. Votre navigateur atterrit sur une **page d'erreur de connexion** — c'est
+   normal : le fournisseur renvoie vers `localhost`, c'est-à-dire votre poste,
+   et non le serveur.
+4. Copiez l'adresse complète de cette page et collez-la dans le champ prévu,
+   puis **Terminer l'autorisation**.
 
-   ```
-   rclone authorize "drive"
-   ```
+Le jeton est rempli automatiquement. Pour OneDrive, `drive_id` et `drive_type`
+le sont aussi — l'application les demande à Microsoft pour vous.
 
-3. Votre navigateur s'ouvre, vous autorisez l'accès.
-4. Dans l'assistant, cochez **« Afficher les options avancées »** : rclone
-   range `token` parmi celles-ci, il n'apparaît pas autrement.
-5. Collez le jeton rendu par la commande dans le champ `token`.
-
-**OneDrive demande deux champs de plus** : `drive_id` et `drive_type`
-(`personal`, `business` ou `documentLibrary`). Le plus simple est de créer le
-remote une fois sur votre ordinateur avec `rclone config`, puis de recopier les
-trois valeurs depuis le fichier `rclone.conf` qu'il produit — il se trouve dans
-`%APPDATA%clone\` sous Windows.
+Ce parcours a besoin que le **port 53682** soit publié par le conteneur ; le
+template le prévoit. Il n'est utilisé que le temps d'une autorisation.
 
 Le jeton est écrit directement dans le `rclone.conf` du conteneur. Il n'est
 jamais réaffiché ensuite, ni inclus dans une sauvegarde de configuration.
