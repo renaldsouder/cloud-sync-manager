@@ -13,6 +13,10 @@ node_modules/
 dist/
 .vite/
 
+# Binaire rclone de développement (fourni par l'image en production)
+.tools/
+backend/dev-appdata/
+
 # Données applicatives / appdata local
 *.db
 *.db-wal

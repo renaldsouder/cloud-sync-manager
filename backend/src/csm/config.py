@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     #: Build du frontend servi par l'API (un seul conteneur, un seul port).
     web_dir: Path = Path("/app/web")
 
+    #: Chemin explicite du binaire rclone. Vide ⇒ recherche dans le ``PATH``,
+    #: ce qui est le cas dans l'image. Utile en développement pour pointer une
+    #: copie locale (``backend/.tools/rclone.exe``).
+    rclone_binary: str | None = None
+
     log_level: str = "INFO"
 
     @property

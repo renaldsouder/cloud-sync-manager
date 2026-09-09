@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from csm import __version__
@@ -16,6 +17,16 @@ def test_health_reports_database_and_version(client: TestClient) -> None:
     # santé doit le dire sans faire tomber l'API (« degraded », pas 500).
     assert payload["status"] in {"ok", "degraded"}
     assert "rclone" in payload["checks"]
+
+
+def test_health_reports_rclone_when_available(client: TestClient) -> None:
+    if not client.app.state.settings.rclone_binary:
+        pytest.skip("binaire rclone introuvable sur cet hôte")
+
+    payload = client.get("/api/health").json()
+    assert payload["checks"]["rclone"]["ok"] is True
+    assert payload["checks"]["rclone"]["version"].startswith("v")
+    assert payload["status"] == "ok"
 
 
 def test_security_headers_are_applied(client: TestClient) -> None:

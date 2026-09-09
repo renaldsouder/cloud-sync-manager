@@ -34,7 +34,8 @@ def health(request: Request) -> dict[str, Any]:
         except Exception as exc:  # pragma: no cover - dépend de l'environnement
             checks["database"] = {"ok": False, "detail": type(exc).__name__}
 
-    info = rclone_version()
+    settings = getattr(request.app.state, "settings", None)
+    info = rclone_version(settings.rclone_binary if settings else None)
     checks["rclone"] = (
         {"ok": True, "version": info.version, "os": info.os, "arch": info.arch}
         if info
