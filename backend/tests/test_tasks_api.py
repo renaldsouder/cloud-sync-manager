@@ -130,10 +130,10 @@ def test_overlapping_tasks_are_refused(
     assert "recoupe" in response.json()["detail"]
 
 
-def test_mirror_is_configurable_but_not_runnable(
+def test_mirror_defaults_are_protective(
     client: TestClient, tmp_path: Path, local_root: Path
 ) -> None:
-    """Le Miroir attend ses garde-fous et sa suite destructive (§20.3)."""
+    """CONF-002 et §8.1 — un Miroir naît protégé, sans réglage de l'utilisateur."""
     remote_id = make_cloud(client, tmp_path / "cloud")
     source = local_root / "Photos"
     source.mkdir()
@@ -142,10 +142,43 @@ def test_mirror_is_configurable_but_not_runnable(
     assert task["mode"] == "mirror"
     assert task["dry_run_required"] is True
     assert task["delete_policy"] == "confirm"
+    assert task["quarantine_enabled"] is True
 
-    response = client.post(f"/api/tasks/{task['id']}/run", json={"dry_run": False})
-    assert response.status_code == 409
-    assert "Copie" in response.json()["detail"]
+    refused = client.post(f"/api/tasks/{task['id']}/run", json={"dry_run": False})
+    assert refused.status_code == 409
+    assert "simulation" in refused.json()["detail"]
+
+
+def test_cloud_to_local_mirror_gets_stricter_thresholds(
+    client: TestClient, tmp_path: Path, local_root: Path
+) -> None:
+    """P13 — descendre vers le share de l'utilisateur mérite plus de méfiance."""
+    from csm.db.models import Task
+
+    remote_id = make_cloud(client, tmp_path / "cloud")
+    for direction, folder in (("local_to_remote", "Montant"), ("remote_to_local", "Descendant")):
+        target = local_root / folder
+        target.mkdir()
+        make_task(
+            client,
+            remote_id,
+            target,
+            name=f"Miroir {folder}",
+            direction=direction,
+            mode="mirror",
+        )
+
+    session = client.app.state.session_factory()
+    try:
+        seuils = {
+            task.direction: (task.max_deletes, task.max_delete_percent)
+            for task in session.query(Task).all()
+        }
+    finally:
+        session.close()
+
+    assert seuils["local_to_remote"] == (100, 10)
+    assert seuils["remote_to_local"] == (25, 5)
 
 
 # -- exécution --------------------------------------------------------------

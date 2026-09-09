@@ -126,7 +126,11 @@ def run_task(
 ) -> RunOut:
     _get_task(session, task_id)
     try:
-        run_id = runner.start(task_id, dry_run=payload.dry_run)
+        run_id = runner.start(
+            task_id,
+            dry_run=payload.dry_run,
+            confirm_deletions=payload.confirm_deletions,
+        )
     except RunError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 

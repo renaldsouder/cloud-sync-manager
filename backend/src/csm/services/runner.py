@@ -1,13 +1,22 @@
-"""Exécution des tâches (SYNC-001, SYNC-002, SYNC-004, TASK-002, UI-003).
+"""Exécution des tâches (SYNC-001/002/004, TASK-002, UI-003, §8).
 
 Un processus rclone par exécution (décision P3). L'attribution des
 événements est alors structurelle : ce qui sort du ``stderr`` de ce
 processus appartient à cette exécution, et à aucune autre, même quand
 plusieurs tâches tournent en parallèle.
+
+Une exécution destructive se déroule en trois temps :
+
+1. **contrôle de la source** — inaccessible ou anormalement vide, on
+   s'arrête sans rien supprimer (§8.2) ;
+2. **simulation de contrôle** — on mesure ce qui serait supprimé et on
+   compare aux seuils *avant* qu'un fichier ne bouge (§8.3) ;
+3. **transfert** — avec quarantaine, donc réversible (CONF-004).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
@@ -23,17 +32,16 @@ from csm.db.models import Remote, Task, TaskEvent, TaskRun, new_id
 from csm.rclone import events as rclone_events
 from csm.rclone.adapter import RcloneAdapter
 from csm.rclone.events import RcloneEvent
+from csm.services import guards
+from csm.services.guards import DeletionPlan, GuardBlocked
 
 logger = logging.getLogger("csm.runner")
 
 #: Plafond d'événements fichier par fichier conservés en base. Au-delà, les
-#: compteurs restent exacts mais le détail est tronqué : le §13 interdit une
-#: croissance illimitée de la base (LOG-005).
+#: compteurs restent exacts mais le détail est tronqué (§13, LOG-005).
 MAX_STORED_EVENTS = 5000
 
-#: Modes autorisés à ce stade. Le Miroir reste fermé tant que les garde-fous
-#: du §8 et la suite destructive du §20.3 ne sont pas en place (J4).
-SUPPORTED_MODES = frozenset({"copy"})
+SUPPORTED_MODES = frozenset({"copy", "mirror"})
 
 RUN_TO_TASK_STATUS = {
     "success": "success",
@@ -49,13 +57,32 @@ class RunError(RuntimeError):
 
 
 @dataclass
+class RunPlan:
+    operation: str
+    source: str
+    destination: str
+    dry_run: bool
+    confirm_deletions: bool = False
+    bwlimit: str | None = None
+    max_deletes: int | None = None
+    max_delete_percent: int | None = None
+    quarantine: bool = True
+
+    @property
+    def destructive(self) -> bool:
+        """Une simulation ne détruit rien, une Copie non plus (§7.1)."""
+        return self.operation == "sync" and not self.dry_run
+
+
+@dataclass
 class LiveRun:
     run_id: str
     task_id: str
     task_name: str
     dry_run: bool
     started_at: datetime
-    process: subprocess.Popen[str]
+    process: subprocess.Popen[str] | None = None
+    phase: str = "démarrage"
     status: str = "running"
     cancelled: bool = False
     current_file: str | None = None
@@ -64,19 +91,34 @@ class LiveRun:
         default_factory=lambda: {"transfers": 0, "deletes": 0, "errors": 0}
     )
     last_error: str | None = None
+    blocked_reason: str | None = None
+    deletion_plan: DeletionPlan | None = None
 
     def snapshot(self) -> dict[str, Any]:
+        plan = self.deletion_plan
         return {
             "run_id": self.run_id,
             "task_id": self.task_id,
             "task_name": self.task_name,
             "dry_run": self.dry_run,
             "status": self.status,
+            "phase": self.phase,
             "started_at": self.started_at.isoformat(),
             "current_file": self.current_file,
             "counters": dict(self.counters),
             "stats": dict(self.stats),
             "last_error": self.last_error,
+            "blocked_reason": self.blocked_reason,
+            "deletion_plan": (
+                {
+                    "deletes": plan.deletes,
+                    "checks": plan.checks,
+                    "percent": plan.percent,
+                    "paths": plan.paths[:50],
+                }
+                if plan
+                else None
+            ),
         }
 
 
@@ -89,7 +131,7 @@ def endpoints(task: Task, remote: Remote) -> tuple[str, str]:
 
 
 def requires_dry_run(task: Task) -> bool:
-    """§8.1 — une simulation est exigée avant la première exécution destructive.
+    """§8.1 — simulation exigée avant la première exécution destructive.
 
     Une Copie ne supprime rien : la lui imposer n'apporterait aucune sécurité
     et découragerait l'usage du garde-fou là où il compte vraiment.
@@ -123,9 +165,15 @@ class RunManager:
                 for run in self._runs.values()
             )
 
+    def live_runs(self) -> list[LiveRun]:
+        with self._lock:
+            return [run for run in self._runs.values() if run.status == "running"]
+
     # -- cycle de vie -------------------------------------------------------
 
-    def start(self, task_id: str, *, dry_run: bool) -> str:
+    def start(
+        self, task_id: str, *, dry_run: bool, confirm_deletions: bool = False
+    ) -> str:
         if self.is_running(task_id):
             raise RunError("cette tâche est déjà en cours d'exécution")
 
@@ -136,8 +184,7 @@ class RunManager:
                 raise RunError("tâche introuvable")
             if task.mode not in SUPPORTED_MODES:
                 raise RunError(
-                    f"le mode « {task.mode} » n'est pas encore disponible : "
-                    "seule la Copie est active à ce stade"
+                    f"le mode « {task.mode} » n'est pas encore disponible"
                 )
             if not dry_run and requires_dry_run(task):
                 raise RunError(
@@ -150,12 +197,16 @@ class RunManager:
                 raise RunError("le stockage associé à cette tâche a disparu")
 
             source, destination = endpoints(task, remote)
-            arguments = self._adapter.build_transfer_args(
-                _operation_for(task.mode),
-                source,
-                destination,
+            plan = RunPlan(
+                operation="sync" if task.mode == "mirror" else "copy",
+                source=source,
+                destination=destination,
                 dry_run=dry_run,
+                confirm_deletions=confirm_deletions,
                 bwlimit=_bandwidth_limit(task),
+                max_deletes=task.max_deletes,
+                max_delete_percent=task.max_delete_percent,
+                quarantine=task.quarantine_enabled,
             )
 
             run = TaskRun(
@@ -169,28 +220,26 @@ class RunManager:
             task.status = "running"
             task.last_run_id = run.id
             session.commit()
-            run_id = run.id
-            task_name = task.name
+            live = LiveRun(
+                run_id=run.id,
+                task_id=task_id,
+                task_name=task.name,
+                dry_run=dry_run,
+                started_at=datetime.now(timezone.utc),
+            )
         finally:
             session.close()
 
-        process = self._adapter.start(arguments)
-        live = LiveRun(
-            run_id=run_id,
-            task_id=task_id,
-            task_name=task_name,
-            dry_run=dry_run,
-            started_at=datetime.now(timezone.utc),
-            process=process,
-        )
         with self._lock:
-            self._runs[run_id] = live
+            self._runs[live.run_id] = live
 
-        thread = threading.Thread(
-            target=self._pump, args=(live,), name=f"csm-run-{run_id[:8]}", daemon=True
-        )
-        thread.start()
-        return run_id
+        threading.Thread(
+            target=self._execute,
+            args=(live, plan),
+            name=f"csm-run-{live.run_id[:8]}",
+            daemon=True,
+        ).start()
+        return live.run_id
 
     def stop(self, run_id: str, *, grace: float = 15.0) -> bool:
         """Interrompt proprement une exécution (TASK-002, §8.5)."""
@@ -200,60 +249,179 @@ class RunManager:
 
         live.cancelled = True
         process = live.process
-        try:
-            if os.name == "posix":
-                # SIGINT : rclone termine les transferts en vol puis sort.
-                process.send_signal(signal.SIGINT)
-            else:
-                process.terminate()
-        except (OSError, ValueError):  # pragma: no cover - course à l'arrêt
-            return False
+        if process is None:
+            # Arrêt demandé entre deux phases, ou avant que le processus ne
+            # soit enregistré : _spawn honorera l'annulation en attente.
+            return True
 
-        try:
-            process.wait(timeout=grace)
-        except subprocess.TimeoutExpired:
-            process.kill()
-        return True
+        return _terminate(process, grace)
 
     def stop_all(self) -> None:
-        for run_id in [run.run_id for run in self.snapshots_live()]:
-            self.stop(run_id, grace=5.0)
+        for run in self.live_runs():
+            self.stop(run.run_id, grace=5.0)
 
-    def snapshots_live(self) -> list[LiveRun]:
-        with self._lock:
-            return [run for run in self._runs.values() if run.status == "running"]
+    # -- déroulé ------------------------------------------------------------
 
-    # -- boucle de lecture --------------------------------------------------
-
-    def _pump(self, live: LiveRun) -> None:
-        buffer: list[TaskEvent] = []
-        stored = 0
+    def _execute(self, live: LiveRun, plan: RunPlan) -> None:
         session = self._session_factory()
         try:
-            stream = live.process.stderr
-            if stream is not None:
-                for line in stream:
-                    event = rclone_events.parse_line(line)
-                    if event is None:
-                        continue
-                    stored = self._handle(live, event, buffer, stored, session)
-                    if len(buffer) >= 100:
-                        session.add_all(buffer)
-                        session.commit()
-                        buffer.clear()
+            if plan.destructive:
+                live.phase = "contrôle de la source"
+                try:
+                    guards.check_source_available(
+                        self._adapter, plan.source, plan.destination
+                    )
+                except GuardBlocked as exc:
+                    self._finalise_blocked(live, session, str(exc))
+                    session.commit()
+                    return
 
-            exit_code = live.process.wait()
-            if buffer:
-                session.add_all(buffer)
-                buffer.clear()
+                if live.cancelled:
+                    self._finalise(live, None, session)
+                    session.commit()
+                    return
+
+                live.phase = "simulation de contrôle"
+                deletion_plan = self._simulate(live, plan)
+                live.deletion_plan = deletion_plan
+
+                if live.cancelled:
+                    self._finalise(live, None, session)
+                    session.commit()
+                    return
+
+                reason = (
+                    None
+                    if plan.confirm_deletions
+                    else guards.evaluate_threshold(
+                        deletion_plan,
+                        max_deletes=plan.max_deletes,
+                        max_delete_percent=plan.max_delete_percent,
+                    )
+                )
+                if reason:
+                    self._store_planned_deletions(live, session, deletion_plan)
+                    self._finalise_blocked(live, session, reason)
+                    session.commit()
+                    return
+
+            live.phase = "transfert"
+            exit_code = self._pump(live, session, self._arguments(live, plan))
             self._finalise(live, exit_code, session)
             session.commit()
-        except Exception:  # pragma: no cover - filet de sécurité du thread
+        except Exception:  # pragma: no cover - filet de sécurité du fil
             logger.exception("exécution %s interrompue par une erreur interne", live.run_id)
             session.rollback()
             live.status = "error"
         finally:
             session.close()
+
+    def _arguments(self, live: LiveRun, plan: RunPlan) -> list[str]:
+        backup_dir: str | None = None
+        extra: list[str] = []
+
+        if plan.destructive and plan.quarantine:
+            backup_dir = guards.quarantine_directory(plan.destination)
+            # Sans cette exclusion, rclone refuse le chevauchement entre la
+            # destination et la corbeille qu'elle contient.
+            extra += ["--exclude", guards.QUARANTINE_EXCLUDE]
+
+        if plan.destructive:
+            belt = (
+                (live.deletion_plan.deletes if live.deletion_plan else None)
+                if plan.confirm_deletions
+                else plan.max_deletes
+            )
+            if belt is not None:
+                # Seconde ceinture seulement : rclone supprime jusqu'au seuil
+                # avant d'abandonner, la décision de bloquer a déjà été prise.
+                extra += ["--max-delete", str(belt)]
+
+        return self._adapter.build_transfer_args(
+            plan.operation,
+            plan.source,
+            plan.destination,
+            dry_run=plan.dry_run,
+            bwlimit=plan.bwlimit,
+            backup_dir=backup_dir,
+            extra=extra,
+        )
+
+    def _spawn(self, live: LiveRun, arguments: list[str]) -> subprocess.Popen[str]:
+        """Démarre rclone en honorant une annulation déjà demandée.
+
+        Sans ce contrôle, un arrêt tombant entre le démarrage du processus et
+        son enregistrement passerait inaperçu : ``stop`` ne trouverait rien à
+        interrompre et le transfert irait à son terme malgré la demande.
+        """
+        process = self._adapter.start(arguments)
+        live.process = process
+        if live.cancelled:
+            _terminate(process, 5.0)
+        return process
+
+    def _simulate(self, live: LiveRun, plan: RunPlan) -> DeletionPlan:
+        """Mesure ce que ferait l'exécution réelle, sans rien écrire."""
+        arguments = self._adapter.build_transfer_args(
+            plan.operation,
+            plan.source,
+            plan.destination,
+            dry_run=True,
+            bwlimit=plan.bwlimit,
+            # La corbeille doit être exclue ici aussi : sans cela, la
+            # simulation compterait comme « à supprimer » tout ce qu'une
+            # exécution précédente y a déposé, et ferait franchir le seuil
+            # à une tâche qui n'a pourtant rien de dangereux.
+            extra=["--exclude", guards.QUARANTINE_EXCLUDE] if plan.quarantine else None,
+        )
+        result = DeletionPlan()
+        process = self._spawn(live, arguments)
+        try:
+            stream = process.stderr
+            if stream is not None:
+                for line in stream:
+                    event = rclone_events.parse_line(line)
+                    if event is None:
+                        continue
+                    if event.kind == rclone_events.STATS and event.stats:
+                        summary = rclone_events.summarise(event.stats)
+                        result.deletes = summary["deletes"]
+                        result.checks = summary["checks"]
+                        result.transfers = summary["transfers"]
+                    elif event.kind == rclone_events.SKIP_DELETE and event.path:
+                        if len(result.paths) < guards.MAX_LISTED_PATHS:
+                            result.paths.append(event.path)
+            process.wait()
+        finally:
+            live.process = None
+        # Le décompte des chemins fait foi sur celui des statistiques, qui
+        # peut manquer le dernier relevé si le processus se termine vite.
+        result.deletes = max(result.deletes, len(result.paths))
+        return result
+
+    def _pump(self, live: LiveRun, session: Session, arguments: list[str]) -> int:
+        buffer: list[TaskEvent] = []
+        stored = 0
+        process = self._spawn(live, arguments)
+        try:
+            stream = process.stderr
+            if stream is not None:
+                for line in stream:
+                    event = rclone_events.parse_line(line)
+                    if event is None:
+                        continue
+                    stored = self._handle(live, event, buffer, stored)
+                    if len(buffer) >= 100:
+                        session.add_all(buffer)
+                        session.commit()
+                        buffer.clear()
+            exit_code = process.wait()
+        finally:
+            live.process = None
+
+        if buffer:
+            session.add_all(buffer)
+        return exit_code
 
     def _handle(
         self,
@@ -261,7 +429,6 @@ class RunManager:
         event: RcloneEvent,
         buffer: list[TaskEvent],
         stored: int,
-        session: Session,
     ) -> int:
         if event.kind == rclone_events.STATS:
             if event.stats:
@@ -303,7 +470,59 @@ class RunManager:
                 )
         return stored
 
-    def _finalise(self, live: LiveRun, exit_code: int, session: Session) -> None:
+    # -- clôture ------------------------------------------------------------
+
+    def _store_planned_deletions(
+        self, live: LiveRun, session: Session, plan: DeletionPlan
+    ) -> None:
+        """§8.4 — la liste de ce qui aurait été supprimé reste tracée.
+
+        C'est elle qui alimente l'écran « Supprimer 423 fichiers » du §10.4 :
+        l'utilisateur doit voir *quoi*, pas seulement *combien*.
+        """
+        session.add_all(
+            TaskEvent(
+                run_id=live.run_id,
+                kind=rclone_events.SKIP_DELETE,
+                path=path,
+                message="suppression prévue, bloquée par le seuil",
+            )
+            for path in plan.paths
+        )
+
+    def _finalise_blocked(self, live: LiveRun, session: Session, reason: str) -> None:
+        live.status = "blocked"
+        live.blocked_reason = reason
+
+        session.add(
+            TaskEvent(run_id=live.run_id, kind="warning", message=reason)
+        )
+
+        run = session.get(TaskRun, live.run_id)
+        if run is not None:
+            run.status = "blocked"
+            run.ended_at = datetime.now(timezone.utc)
+            run.deleted_files = 0
+            run.summary_json = json.dumps(
+                {
+                    "blocked_reason": reason,
+                    "deletion_plan": (
+                        {
+                            "deletes": live.deletion_plan.deletes,
+                            "checks": live.deletion_plan.checks,
+                            "percent": live.deletion_plan.percent,
+                        }
+                        if live.deletion_plan
+                        else None
+                    ),
+                },
+                ensure_ascii=False,
+            )
+            task = session.get(Task, live.task_id)
+            if task is not None:
+                task.status = "blocked"
+
+    def _finalise(self, live: LiveRun, exit_code: int | None, session: Session) -> None:
         status = _final_status(live, exit_code)
         live.status = status
 
@@ -315,16 +534,62 @@ class RunManager:
             run.transferred_files = live.counters["transfers"]
             run.transferred_bytes = int(live.stats.get("bytes", 0))
             run.deleted_files = live.counters["deletes"]
-            run.errors_count = max(live.counters["errors"], int(live.stats.get("errors", 0)))
+            run.errors_count = max(
+                live.counters["errors"], int(live.stats.get("errors", 0))
+            )
             run.summary_json = _summary_json(live)
 
             task = session.get(Task, live.task_id)
             if task is not None:
                 task.status = RUN_TO_TASK_STATUS.get(status, "ready")
+                # §8.1 — la simulation exigée avant la première exécution
+                # destructive est consommée dès qu'elle a réussi.
+                if live.dry_run and status == "success":
+                    task.dry_run_required = False
 
 
-def _operation_for(mode: str) -> str:
-    return "sync" if mode == "mirror" else "copy"
+def _terminate(process: subprocess.Popen[str], grace: float) -> bool:
+    """Arrêt propre puis, si nécessaire, brutal (§8.5)."""
+    try:
+        if os.name == "posix":
+            # SIGINT : rclone termine les transferts en vol puis sort.
+            process.send_signal(signal.SIGINT)
+        else:
+            process.terminate()
+    except (OSError, ValueError):  # pragma: no cover - course à l'arrêt
+        return False
+
+    try:
+        process.wait(timeout=grace)
+    except subprocess.TimeoutExpired:
+        process.kill()
+    return True
+
+
+def _final_status(live: LiveRun, exit_code: int | None) -> str:
+    """§8.5 — après un arrêt forcé ou un plantage, jamais « Réussie »."""
+    if live.cancelled:
+        return "interrupted"
+    if exit_code is None or exit_code != 0:
+        return "error"
+    if live.counters["errors"] or int(live.stats.get("errors", 0)):
+        return "warning"
+    return "success"
+
+
+def _summary_json(live: LiveRun) -> str:
+    payload: dict[str, Any] = {
+        "stats": live.stats,
+        "counters": live.counters,
+        "last_error": live.last_error,
+    }
+    if live.deletion_plan is not None:
+        payload["deletion_plan"] = {
+            "deletes": live.deletion_plan.deletes,
+            "checks": live.deletion_plan.checks,
+            "percent": live.deletion_plan.percent,
+        }
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def _bandwidth_limit(task: Task) -> str | None:
@@ -334,34 +599,12 @@ def _bandwidth_limit(task: Task) -> str | None:
     """
     if not task.bandwidth_json:
         return None
-    import json as _json
-
     try:
-        payload = _json.loads(task.bandwidth_json)
+        payload = json.loads(task.bandwidth_json)
     except ValueError:
         return None
     limit = payload.get("limit") if isinstance(payload, dict) else None
     return str(limit) if limit else None
-
-
-def _final_status(live: LiveRun, exit_code: int) -> str:
-    """§8.5 — après un arrêt forcé ou un plantage, jamais « Réussie »."""
-    if live.cancelled:
-        return "interrupted"
-    if exit_code != 0:
-        return "error"
-    if live.counters["errors"] or int(live.stats.get("errors", 0)):
-        return "warning"
-    return "success"
-
-
-def _summary_json(live: LiveRun) -> str:
-    import json
-
-    return json.dumps(
-        {"stats": live.stats, "counters": live.counters, "last_error": live.last_error},
-        ensure_ascii=False,
-    )
 
 
 def _version_or_none(adapter: RcloneAdapter) -> str | None:

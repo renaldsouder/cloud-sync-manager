@@ -86,9 +86,20 @@ def _classify(payload: dict[str, Any], level: str, message: str) -> str:
         return ERROR
 
     lowered = message.lower()
+
+    # Avec une quarantaine (``--backup-dir``), rclone ne supprime pas : il
+    # déplace, et n'émet donc jamais « Deleted ». Sans ce cas, aucune
+    # suppression ne serait tracée dès que la corbeille est active (§8.4).
+    if lowered.startswith("moved into backup dir"):
+        return DELETE
+    if lowered.startswith("moved"):
+        # Moitié mécanique du déplacement : la ligne ci-dessus porte déjà le
+        # sens, la compter aussi ferait un doublon.
+        return OTHER
+
     if lowered.startswith("deleted"):
         return DELETE
-    if lowered.startswith(("copied", "moved", "updated", "renamed")):
+    if lowered.startswith(("copied", "updated", "renamed")):
         return TRANSFER
 
     return OTHER

@@ -147,6 +147,10 @@ export type Run = {
   errors_count: number;
   dry_run: boolean;
   rclone_version: string | null;
+  summary: {
+    blocked_reason?: string;
+    deletion_plan?: { deletes: number; checks: number; percent: number };
+  } | null;
   live: LiveRun | null;
 };
 
@@ -165,11 +169,29 @@ export const createTask = (body: {
 export const deleteTask = (id: string) =>
   request<void>(`/api/tasks/${id}`, { method: "DELETE" });
 
-export const runTask = (id: string, dryRun: boolean) =>
+export const runTask = (id: string, dryRun: boolean, confirmDeletions = false) =>
   request<Run>(`/api/tasks/${id}/run`, {
     method: "POST",
-    body: JSON.stringify({ dry_run: dryRun }),
+    body: JSON.stringify({ dry_run: dryRun, confirm_deletions: confirmDeletions }),
   });
+
+export type TaskEvent = {
+  id: number;
+  kind: string;
+  at: string;
+  path: string | null;
+  size: number | null;
+  message: string | null;
+};
+
+export const fetchRun = (runId: string, signal?: AbortSignal) =>
+  request<Run>(`/api/runs/${runId}`, { signal });
+
+export const fetchEvents = (runId: string, kind?: string, signal?: AbortSignal) =>
+  request<TaskEvent[]>(
+    `/api/runs/${runId}/events${kind ? `?kind=${encodeURIComponent(kind)}` : ""}`,
+    { signal },
+  );
 
 export const stopRun = (runId: string) =>
   request<Run>(`/api/runs/${runId}/stop`, { method: "POST" });

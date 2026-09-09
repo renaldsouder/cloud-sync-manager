@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import BlockedRun from "./BlockedRun";
 import TaskWizard from "./TaskWizard";
 import {
   deleteTask,
@@ -20,7 +21,7 @@ const STATUS_LABEL: Record<string, string> = {
   success: "Réussie",
   warning: "Avertissement",
   error: "Erreur",
-  blocked: "Bloquée",
+  blocked: "Bloquée — validation nécessaire",
   interrupted: "Interrompue",
 };
 
@@ -158,6 +159,14 @@ export default function TasksView() {
               </p>
 
               {running && <Progress run={running} />}
+
+              {!running && task.status === "blocked" && task.last_run_id && (
+                <BlockedRun
+                  runId={task.last_run_id}
+                  taskName={task.name}
+                  onConfirm={() => void act(() => runTask(task.id, false, true))}
+                />
+              )}
 
               {expanded === task.id && (
                 <ul className="history">

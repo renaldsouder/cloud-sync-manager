@@ -177,10 +177,13 @@ export default function TaskWizard({ onCreated, onCancel }: Props) {
 
       {mode === "mirror" && (
         <div className="notice">
-          <strong>Le Miroir n'est pas encore exécutable.</strong>
+          <strong>Protections appliquées à ce mode</strong>
           <p>
-            La tâche peut être créée et simulée, mais son exécution reste fermée tant
-            que les protections contre les suppressions ne sont pas terminées.
+            Une simulation est obligatoire avant la première exécution. Ensuite,
+            chaque lancement mesure d'abord ce qui serait supprimé : si la source
+            paraît vide ou inaccessible, ou si le nombre de suppressions dépasse le
+            seuil de la tâche, rien n'est touché et votre validation est demandée.
+            Les fichiers supprimés sont déplacés dans une corbeille à destination.
           </p>
         </div>
       )}

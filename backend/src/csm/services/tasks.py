@@ -21,9 +21,13 @@ from csm.paths import (
 DIRECTIONS = frozenset({"local_to_remote", "remote_to_local"})
 MODES = frozenset({"copy", "mirror", "bisync"})
 
-#: Modes réellement exécutables aujourd'hui. Le Miroir peut être configuré et
-#: simulé, mais son exécution reste fermée jusqu'à la suite destructive (§20.3).
-RUNNABLE_MODES = frozenset({"copy"})
+#: Seuils par défaut d'un Miroir (§8.3). Plus stricts en Cloud → Local :
+#: la destination est alors le share de l'utilisateur, et une erreur de
+#: configuration y détruit des données qu'aucun fournisseur ne reconstruira.
+DEFAULT_THRESHOLDS = {
+    "local_to_remote": (100, 10),
+    "remote_to_local": (25, 5),
+}
 
 
 class TaskError(RuntimeError):
@@ -125,10 +129,11 @@ def create_task(
         delete_policy="never" if mode == "copy" else "confirm",
         status="ready",
     )
-    if max_deletes is not None:
-        task.max_deletes = max_deletes
-    if max_delete_percent is not None:
-        task.max_delete_percent = max_delete_percent
+    default_deletes, default_percent = DEFAULT_THRESHOLDS[direction]
+    task.max_deletes = max_deletes if max_deletes is not None else default_deletes
+    task.max_delete_percent = (
+        max_delete_percent if max_delete_percent is not None else default_percent
+    )
 
     session.add(task)
     session.flush()

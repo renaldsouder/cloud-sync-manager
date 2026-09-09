@@ -114,6 +114,10 @@ class TaskUpdate(BaseModel):
 class TaskRunStart(BaseModel):
     #: La simulation est le défaut : il faut demander explicitement à écrire.
     dry_run: bool = True
+    #: Autorise une exécution au-delà du seuil de suppression (§8.3). Ne
+    #: dispense jamais du contrôle de source : une source démontée reste
+    #: refusée, quoi que l'utilisateur confirme.
+    confirm_deletions: bool = False
 
 
 class TaskOut(BaseModel):

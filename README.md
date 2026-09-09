@@ -6,10 +6,10 @@ ligne de commande.
 
 Moteur [rclone](https://rclone.org). Un seul conteneur, une seule WebUI.
 
-> **État : J3 — tâches unidirectionnelles.** Copie Local → Cloud et Cloud →
-> Local, simulation, lancement manuel, progression temps réel, arrêt propre et
-> historique. Le Miroir est configurable mais **pas encore exécutable** : il
-> attend ses protections contre les suppressions (J4).
+> **État : J4 — Miroir et sécurité destructive.** Copie et Miroir dans les deux
+> sens, simulation, seuil de suppression, détection de source inaccessible,
+> quarantaine récupérable, confirmation renforcée, progression et arrêt.
+> Le bidirectionnel reste hors périmètre tant que sa matrice de tests n'existe pas.
 
 - Cahier des charges : [`docs/Cloud_Sync_Manager_Cahier_des_charges.md`](docs/Cloud_Sync_Manager_Cahier_des_charges.md)
 - Décisions techniques : [`docs/Propositions_Techniques_Unraid.md`](docs/Propositions_Techniques_Unraid.md)
@@ -81,6 +81,10 @@ Tout l'état persistant vit sous `/config` (appdata Unraid) : base SQLite,
 - Ni `--privileged`, ni accès au socket Docker.
 - Aucune suppression distante activée par défaut ; simulation obligatoire
   avant la première exécution destructive.
+- Source vide ou inaccessible : la tâche échoue **sans propager de suppression**.
+- Au-delà du seuil configuré, la tâche passe « Bloquée » et attend une
+  validation explicite qui nomme le nombre exact de fichiers concernés.
+- Les suppressions sont des déplacements vers `.cloudsync-trash` : réversibles.
 
 ## Licence
 
