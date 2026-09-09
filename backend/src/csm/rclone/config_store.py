@@ -17,6 +17,7 @@ from __future__ import annotations
 import configparser
 import os
 import stat
+import time
 from pathlib import Path
 
 ENCRYPTED_MARKER = "RCLONE_ENCRYPT_V0:"
@@ -110,7 +111,30 @@ class RcloneConfigStore:
             os.chmod(temporary, stat.S_IRUSR | stat.S_IWUSR)
         except OSError:  # pragma: no cover
             pass
-        # Remplacement atomique : jamais de rclone.conf tronqué si le
-        # conteneur s'arrête au mauvais moment.
-        os.replace(temporary, self.path)
+        self._replace_atomically(temporary)
         self._harden()
+
+    def _replace_atomically(self, temporary: Path, attempts: int = 5) -> None:
+        """Remplace le fichier en place, sans état intermédiaire visible.
+
+        Jamais de ``rclone.conf`` tronqué si le conteneur s'arrête au mauvais
+        moment : on écrit à côté, puis on substitue d'un seul geste.
+
+        Sous Windows, cette substitution échoue par intermittence avec
+        ``ERROR_ACCESS_DENIED`` quand un antivirus ou l'indexeur tient
+        brièvement le fichier qui vient d'être écrit — observé une fois sur
+        neuf sur la suite de tests. Sous Linux, seul environnement de
+        production, ``rename(2)`` est atomique et ignore ce cas. On réessaie
+        donc brièvement plutôt que de faire échouer l'enregistrement d'un
+        stockage sur un aléa de poste de développement.
+        """
+        delay = 0.05
+        for remaining in range(attempts - 1, -1, -1):
+            try:
+                os.replace(temporary, self.path)
+                return
+            except PermissionError:
+                if remaining == 0:
+                    raise
+                time.sleep(delay)
+                delay *= 2
