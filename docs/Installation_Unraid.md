@@ -148,6 +148,11 @@ Deux canaux, tous deux optionnels, dans **Paramètres**.
 - **Unraid** : renseignez l'adresse de votre serveur et une clé d'API.
   Elle n'est jamais réaffichée ni exportée.
 
+  Indiquez bien l'adresse du serveur sur le réseau — `https://192.168.x.x` —
+  et non `localhost` : en réseau *bridge*, `localhost` désigne le conteneur
+  lui-même, y compris lorsque l'application tourne sur le serveur qu'elle
+  notifie.
+
   **Créez une clé limitée aux notifications, pas une clé `admin`.** Notre
   besoin se réduit à écrire un message ; un rôle `admin` donnerait en prime
   l'accès à votre baie, vos disques, vos VM, votre Docker et votre réseau.

@@ -140,7 +140,9 @@ Google Drive, OneDrive et Dropbox exigent un aller-retour navigateur. `rclone au
 
 L'ancienne méthode — monter `/usr/local/emhttp` et appeler le script `notify` — imposerait un montage du système hôte, contraire au §5.3 et à **SEC-004**. L'API officielle ne demande qu'une clé, saisie par l'utilisateur dans nos paramètres, et se dégrade proprement : pas de clé ⇒ notifications désactivées, jamais d'échec de tâche. Répond à **NOTIF-002**.
 
-**Validé.** La mutation `notifyIfUnique` est acceptée avec `title`, `subject`, `description` et `importance`, et la permission `NOTIFICATIONS:CREATE_ANY` suffit — le rôle `admin` n'est pas nécessaire. La **question 5 du §25** se referme dès confirmation de l'affichage côté Unraid.
+**Validé de bout en bout sur Unraid 7.3.2.** La mutation `notifyIfUnique` est acceptée avec `title`, `subject`, `description` et `importance`, et la permission `NOTIFICATIONS:CREATE_ANY` suffit — le rôle `admin` n'est pas nécessaire. La notification est reçue côté Unraid : **la question 5 du §25 est close**.
+
+À noter pour la documentation : depuis un conteneur en réseau *bridge*, `localhost` désigne le conteneur, pas le serveur. L'adresse à renseigner est donc celle du serveur sur le réseau, et l'option « certificat auto-signé » reste nécessaire même quand l'application tourne sur la machine qu'elle notifie.
 
 **L'obstacle n'était pas là où on le cherchait.** Un serveur Unraid en HTTPS présente par défaut un **certificat auto-signé** : le client refusait la connexion avant même de l'établir, et l'on soupçonnait la mutation alors que la requête ne partait jamais. D'où le réglage « accepter un certificat auto-signé », désactivé par défaut. À retenir pour tout futur canal sortant vers une machine du réseau local — et à retenir aussi que l'interface doit rendre la cause, faute de quoi le diagnostic passe par les journaux du conteneur.
 
