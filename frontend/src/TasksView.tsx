@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
 import BlockedRun from "./BlockedRun";
+import ScheduleEditor from "./ScheduleEditor";
 import TaskWizard from "./TaskWizard";
 import {
   deleteTask,
   fetchRuns,
   fetchTasks,
   formatBytes,
+  formatDate,
   runTask,
   stopRun,
   subscribeToRuns,
@@ -41,6 +43,7 @@ export default function TasksView() {
   const [live, setLive] = useState<Record<string, LiveRun>>({});
   const [runs, setRuns] = useState<Record<string, Run[]>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [planning, setPlanning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -149,6 +152,13 @@ export default function TasksView() {
               </div>
 
               <p className="path">
+                <span className="chip">{task.schedule_label}</span>
+                {task.next_run_at && (
+                  <span className="chip">prochaine : {formatDate(task.next_run_at)}</span>
+                )}
+              </p>
+
+              <p className="path">
                 {task.direction === "local_to_remote" ? (
                   <>
                     <code>{task.local_path}</code> → <code>{task.remote_path || "racine"}</code>
@@ -159,6 +169,17 @@ export default function TasksView() {
                   </>
                 )}
               </p>
+
+              {planning === task.id && (
+                <ScheduleEditor
+                  task={task}
+                  onCancel={() => setPlanning(null)}
+                  onSaved={() => {
+                    setPlanning(null);
+                    void reload();
+                  }}
+                />
+              )}
 
               {running && <Progress run={running} />}
 
@@ -213,6 +234,15 @@ export default function TasksView() {
                       Lancer
                     </button>
                   </>
+                )}
+                {!running && (
+                  <button
+                    type="button"
+                    className="btn btn--small btn--ghost"
+                    onClick={() => setPlanning(planning === task.id ? null : task.id)}
+                  >
+                    {planning === task.id ? "Fermer" : "Planifier"}
+                  </button>
                 )}
                 <button
                   type="button"

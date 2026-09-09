@@ -568,3 +568,97 @@ body {
 .dot--blocked {
   background: var(--ko);
 }
+
+/* --- Tableau de bord ----------------------------------------------------- */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tile__value {
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile__label {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.card + .card {
+  margin-top: 16px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.facts dt {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.facts dd {
+  margin: 3px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Planification ------------------------------------------------------- */
+
+.chip {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 9px;
+  margin-right: 6px;
+  font-size: 12px;
+}
+
+.schedule {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.days {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.day {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.day--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

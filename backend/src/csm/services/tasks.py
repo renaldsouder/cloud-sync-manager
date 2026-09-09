@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from csm.config import Settings
 from csm.db.models import Remote, Task
+from csm.services.schedule import Schedule, ScheduleError, next_occurrence
 from csm.paths import (
     PathNotAllowed,
     assert_valid_destination,
@@ -94,8 +96,10 @@ def create_task(
     remote_path: str,
     direction: str,
     mode: str,
+    schedule: dict | None = None,
     max_deletes: int | None = None,
     max_delete_percent: int | None = None,
+    now: datetime | None = None,
 ) -> Task:
     if direction not in DIRECTIONS:
         raise TaskError(f"sens inconnu : {direction}")
@@ -135,8 +139,28 @@ def create_task(
         max_delete_percent if max_delete_percent is not None else default_percent
     )
 
+    apply_schedule(task, schedule, now=now)
+
     session.add(task)
     session.flush()
+    return task
+
+
+def apply_schedule(task: Task, payload: dict | None, *, now: datetime | None = None) -> Task:
+    """Installe une planification et calcule la prochaine échéance (§11)."""
+    from csm.services.scheduler import local_now
+
+    try:
+        parsed = Schedule.from_dict(payload or {})
+    except ScheduleError as exc:
+        raise TaskError(str(exc)) from exc
+
+    task.schedule_json = parsed.to_json()
+    task.next_run_at = next_occurrence(parsed, now or local_now())
+    if parsed.automatic and task.status == "ready":
+        task.status = "scheduled"
+    elif not parsed.automatic and task.status == "scheduled":
+        task.status = "ready"
     return task
 
 
@@ -148,6 +172,9 @@ def update_task(
     name: str | None = None,
     local_path: str | None = None,
     remote_path: str | None = None,
+    schedule: dict | None = None,
+    enabled: bool | None = None,
+    now: datetime | None = None,
 ) -> Task:
     if name and name != task.name:
         if session.scalar(select(Task).where(Task.name == name, Task.id != task.id)):
@@ -175,6 +202,16 @@ def update_task(
         if normalised != task.remote_path:
             task.remote_path = normalised
             task.dry_run_required = task.mode != "copy"
+
+    if schedule is not None:
+        apply_schedule(task, schedule, now=now)
+
+    if enabled is not None and enabled != task.enabled:
+        task.enabled = enabled
+        if not enabled:
+            task.status = "paused"
+        elif task.status == "paused":
+            task.status = "scheduled" if task.schedule_json else "ready"
 
     session.flush()
     return task

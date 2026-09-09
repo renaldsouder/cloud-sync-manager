@@ -141,7 +141,17 @@ export type Task = {
   status: string;
   last_run_id: string | null;
   next_run_at: string | null;
+  schedule: Schedule | null;
+  schedule_label: string;
   live: LiveRun | null;
+};
+
+export type Schedule = {
+  kind: "manual" | "interval" | "daily" | "weekly";
+  minutes?: number;
+  time?: string;
+  days?: number[];
+  catch_up: "skip" | "once";
 };
 
 export type Run = {
@@ -232,4 +242,36 @@ export function formatBytes(bytes: number): string {
     unit += 1;
   }
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+}
+
+export type Dashboard = {
+  counters: {
+    total: number;
+    scheduled: number;
+    running: number;
+    warning: number;
+    error: number;
+    blocked: number;
+    paused: number;
+  };
+  next_run_at: string | null;
+  throughput_bytes_per_second: number;
+  running: LiveRun[];
+  recent_runs: Run[];
+};
+
+export const fetchDashboard = (signal?: AbortSignal) =>
+  request<Dashboard>("/api/dashboard", { signal });
+
+export const updateTask = (
+  id: string,
+  patch: { schedule?: Schedule | null; enabled?: boolean; name?: string },
+) => request<Task>(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+
+export function formatDate(value: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("fr-FR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
 }

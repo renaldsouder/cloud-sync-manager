@@ -25,6 +25,33 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
+
+
+class UtcDateTime(TypeDecorator):
+    """Date toujours écrite et relue en UTC.
+
+    SQLite ne conserve pas le fuseau : une date écrite en heure locale
+    revient naïve et serait interprétée comme de l'UTC, décalée du décalage
+    horaire. Le piège est silencieux et fausserait toutes les échéances de
+    planification, alors on le neutralise ici, une fois, pour toutes les
+    colonnes plutôt que de compter sur la vigilance à chaque écriture.
+    """
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def process_result_value(self, value: datetime | None, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def new_id() -> str:
@@ -40,9 +67,9 @@ class Base(DeclarativeBase):
 
 
 class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+        UtcDateTime(), default=utcnow, onupdate=utcnow
     )
 
 
@@ -58,7 +85,7 @@ class Remote(TimestampMixin, Base):
     #: renommer un stockage dans l'UI ne casse pas les tâches existantes.
     rclone_remote_name: Mapped[str] = mapped_column(String(128), unique=True)
     status: Mapped[str] = mapped_column(String(32), default="unknown")
-    last_test_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_test_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     #: Matrice de capacités réellement constatées (§9.3). Une connexion réussie
     #: ne signifie pas que toutes les opérations sont supportées.
     capabilities_json: Mapped[str | None] = mapped_column(Text)
@@ -118,7 +145,7 @@ class Task(TimestampMixin, Base):
     #: Avertissement, Erreur, Bloquée (§10.2).
     status: Mapped[str] = mapped_column(String(32), default="ready")
     last_run_id: Mapped[str | None] = mapped_column(String(32))
-    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_run_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
 
     remote: Mapped[Remote] = relationship(back_populates="tasks")
     runs: Mapped[list["TaskRun"]] = relationship(
@@ -136,8 +163,8 @@ class TaskRun(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
 
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
     #: ``running`` | ``success`` | ``warning`` | ``error`` | ``blocked``
     #: | ``interrupted``. Après un arrêt forcé ou un crash, jamais ``success`` (§8.5).
     status: Mapped[str] = mapped_column(String(32), default="running")
@@ -171,7 +198,7 @@ class TaskEvent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[str] = mapped_column(ForeignKey("task_runs.id", ondelete="CASCADE"))
-    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    at: Mapped[datetime] = mapped_column(UtcDateTime(), default=utcnow)
     #: ``transfer`` | ``delete`` | ``error`` | ``retry`` | ``conflict`` | ``warning``
     kind: Mapped[str] = mapped_column(String(32))
     path: Mapped[str | None] = mapped_column(Text)
@@ -191,7 +218,7 @@ class Setting(Base):
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+        UtcDateTime(), default=utcnow, onupdate=utcnow
     )
 
     __table_args__ = (UniqueConstraint("key"),)

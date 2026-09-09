@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import DashboardView from "./DashboardView";
 import RemotesView from "./RemotesView";
 import TasksView from "./TasksView";
 import { fetchHealth, type Health } from "./api";
@@ -9,10 +10,10 @@ const LABELS: Record<string, string> = {
   rclone: "Moteur rclone",
 };
 
-type Tab = "taches" | "stockages" | "etat";
+type Tab = "bord" | "taches" | "stockages" | "etat";
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("taches");
+  const [tab, setTab] = useState<Tab>("bord");
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +42,7 @@ export default function App() {
         <nav className="tabs">
           {(
             [
+              ["bord", "Tableau de bord"],
               ["taches", "Tâches"],
               ["stockages", "Stockages Cloud"],
               ["etat", "État"],
@@ -58,7 +60,9 @@ export default function App() {
         </nav>
       </header>
 
-      {tab === "taches" ? (
+      {tab === "bord" ? (
+        <DashboardView />
+      ) : tab === "taches" ? (
         <TasksView />
       ) : tab === "stockages" ? (
         <RemotesView />
@@ -93,8 +97,8 @@ export default function App() {
       )}
 
       <footer className="shell__footer">
-        Copie Local ↔ Cloud, simulation, progression et arrêt (J3). Le Miroir et
-        ses protections contre les suppressions arrivent à l'étape suivante.
+        Copie et Miroir dans les deux sens, simulation, protections destructives,
+        planification et historique (J5).
       </footer>
     </main>
   );

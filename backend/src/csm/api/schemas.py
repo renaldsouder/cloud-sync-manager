@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from csm.db.models import Remote
+from csm.services.schedule import Schedule, describe
 
 
 class ProviderOption(BaseModel):
@@ -103,12 +104,15 @@ class TaskCreate(BaseModel):
     remote_path: str = ""
     direction: str = "local_to_remote"
     mode: str = "copy"
+    schedule: dict[str, Any] | None = None
 
 
 class TaskUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     local_path: str | None = None
     remote_path: str | None = None
+    schedule: dict[str, Any] | None = None
+    enabled: bool | None = None
 
 
 class TaskRunStart(BaseModel):
@@ -137,10 +141,13 @@ class TaskOut(BaseModel):
     status: str
     last_run_id: str | None = None
     next_run_at: datetime | None = None
+    schedule: dict[str, Any] | None = None
+    schedule_label: str = "manuelle"
     live: dict[str, Any] | None = None
 
     @classmethod
     def build(cls, task: Any, *, live: dict[str, Any] | None = None) -> "TaskOut":
+        schedule = Schedule.parse(task.schedule_json)
         return cls(
             id=task.id,
             name=task.name,
@@ -156,6 +163,8 @@ class TaskOut(BaseModel):
             status=task.status,
             last_run_id=task.last_run_id,
             next_run_at=task.next_run_at,
+            schedule=schedule.to_dict() if schedule.automatic else None,
+            schedule_label=describe(schedule),
             live=live,
         )
 
@@ -213,3 +222,21 @@ class TaskEventOut(BaseModel):
     path: str | None = None
     size: int | None = None
     message: str | None = None
+
+
+class DashboardCounters(BaseModel):
+    total: int = 0
+    scheduled: int = 0
+    running: int = 0
+    warning: int = 0
+    error: int = 0
+    blocked: int = 0
+    paused: int = 0
+
+
+class DashboardOut(BaseModel):
+    counters: DashboardCounters
+    next_run_at: datetime | None = None
+    throughput_bytes_per_second: float = 0.0
+    running: list[dict[str, Any]] = Field(default_factory=list)
+    recent_runs: list[RunOut] = Field(default_factory=list)

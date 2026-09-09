@@ -46,6 +46,16 @@ class Settings(BaseSettings):
     quarantine_retention_days: int = 30
     quarantine_keep_runs: int = 3
 
+    #: Rétention de l'historique d'exécutions (LOG-005, §13). Même règle
+    #: que la quarantaine : ancienneté **et** nombre à conserver.
+    history_retention_days: int = 90
+    history_keep_runs: int = 200
+
+    #: Battement du planificateur. Désactivable pour les tests, qui pilotent
+    #: leur propre instance avec une horloge fixe.
+    scheduler_enabled: bool = True
+    scheduler_poll_seconds: float = 20.0
+
     log_level: str = "INFO"
 
     @property

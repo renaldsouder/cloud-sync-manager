@@ -53,6 +53,9 @@ def settings(tmp_path: Path, local_root: Path) -> Settings:
         web_dir=tmp_path / "no-web",
         allowed_roots=str(local_root),
         rclone_binary=discover_rclone(),
+        # Les tests pilotent leur propre planificateur avec une horloge
+        # fixe : le battement de fond fausserait les scénarios.
+        scheduler_enabled=False,
     )
 
 

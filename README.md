@@ -6,9 +6,9 @@ ligne de commande.
 
 Moteur [rclone](https://rclone.org). Un seul conteneur, une seule WebUI.
 
-> **État : J4 — Miroir et sécurité destructive.** Copie et Miroir dans les deux
-> sens, simulation, seuil de suppression, détection de source inaccessible,
-> quarantaine récupérable, confirmation renforcée, progression et arrêt.
+> **État : J5 — planification et historique.** Copie et Miroir dans les deux
+> sens, protections destructives complètes, planification sans cron avec
+> politique de rattrapage explicite, tableau de bord, historique et rétention.
 > Le bidirectionnel reste hors périmètre tant que sa matrice de tests n'existe pas.
 
 - Cahier des charges : [`docs/Cloud_Sync_Manager_Cahier_des_charges.md`](docs/Cloud_Sync_Manager_Cahier_des_charges.md)
@@ -70,6 +70,10 @@ Tout l'état persistant vit sous `/config` (appdata Unraid) : base SQLite,
 | `CSM_PORT` | `3572` | Port de la WebUI |
 | `CSM_ALLOWED_ROOTS` | `/mnt/user` | Racines locales autorisées, séparées par des virgules |
 | `CSM_WEB_DIR` | `/app/web` | Build du frontend servi par l'API |
+| `CSM_HISTORY_RETENTION_DAYS` | `90` | Âge au-delà duquel une exécution est purgée |
+| `CSM_HISTORY_KEEP_RUNS` | `200` | Exécutions conservées par tâche, quel que soit leur âge |
+| `CSM_SCHEDULER_POLL_SECONDS` | `20` | Battement du planificateur |
+| `TZ` | — | Fuseau du serveur ; les heures de planification s'y réfèrent |
 | `CSM_QUARANTINE_RETENTION_DAYS` | `30` | Âge au-delà duquel une corbeille est purgée |
 | `CSM_QUARANTINE_KEEP_RUNS` | `3` | Corbeilles toujours conservées, quel que soit leur âge |
 | `PUID` / `PGID` | `99` / `100` | Identité des fichiers écrits (`nobody:users`) |
