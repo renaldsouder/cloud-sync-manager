@@ -1,0 +1,26 @@
+.git
+.gitignore
+docs
+unraid
+
+# Environnements et artefacts locaux
+**/.venv
+**/venv
+**/node_modules
+**/dist
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/*.egg-info
+backend/dev-appdata
+
+# Ne doit jamais entrer dans une image
+**/.env
+**/.env.*
+**/rclone.conf
+**/*.db
+**/*.sqlite
+**/*.pem
+**/*.key

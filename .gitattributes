@@ -1,0 +1,15 @@
+# Le dépôt est édité sous Windows mais construit dans une image Linux.
+# Un entrypoint en CRLF donnerait « bad interpreter » au démarrage du
+# conteneur : ces fichiers doivent rester en LF dans la copie de travail.
+* text=auto eol=lf
+
+*.sh   text eol=lf
+Dockerfile text eol=lf
+*.py   text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.sqlite binary

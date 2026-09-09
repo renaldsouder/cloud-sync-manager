@@ -1,0 +1,134 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --line: #e2e5ea;
+  --ink: #16181d;
+  --ink-soft: #5c6470;
+  --ok: #2e9e5b;
+  --ko: #d1495b;
+  --accent: #ff7a2f;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --surface: #1c1f25;
+    --line: #2c313a;
+    --ink: #e8eaee;
+    --ink-soft: #9aa3b0;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.shell {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 40px 20px 64px;
+}
+
+.shell__header h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+.shell__header h1::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 22px;
+  margin-right: 12px;
+  vertical-align: -3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.shell__subtitle {
+  margin: 6px 0 28px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px 22px;
+}
+
+.card h2 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.checks__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.checks__item:first-child {
+  border-top: none;
+}
+
+.checks__label {
+  flex: 1;
+}
+
+.checks__value {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dot--ok {
+  background: var(--ok);
+}
+
+.dot--ko {
+  background: var(--ko);
+}
+
+.state {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.state--error {
+  color: var(--ko);
+}
+
+.shell__footer {
+  margin-top: 24px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.6;
+}

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Données applicatives / appdata local
+*.db
+*.db-wal
+*.db-shm
+appdata/
+data/
+
+# Secrets — ne jamais commiter (SEC-001, §18)
+.env
+.env.*
+!.env.example
+rclone.conf
+*.pem
+*.key
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
