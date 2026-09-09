@@ -23,7 +23,7 @@ Moteur [rclone](https://rclone.org). Un seul conteneur, une seule WebUI.
 backend/    API FastAPI, modèle SQLite, migrations Alembic, adaptateur rclone
 frontend/   WebUI React + TypeScript (Vite)
 docker/     Dockerfile multi-stage et entrypoint PUID/PGID
-unraid/     Template Community Applications et profil de dépôt
+unraid/     Template Community Applications, profil de dépôt et icône
 docs/       Cahier des charges, décisions et documentation d'installation
 ```
 
@@ -98,5 +98,13 @@ Tout l'état persistant vit sous `/config` (appdata Unraid) : base SQLite,
 
 ## Licence
 
-**À définir.** Une licence approuvée OSI est exigée pour publier dans
-Community Applications (UNRAID-005).
+**GPL-3.0-or-later** pour l'application ([`LICENSE`](LICENSE)) : une version
+dérivée doit rester ouverte, ce qui protège les garde-fous contre la perte de
+données plutôt que de laisser quiconque les refermer.
+
+**MIT** pour le dépôt de templates Unraid ([`unraid/LICENSE`](unraid/LICENSE)),
+qui n'est que du XML descriptif — aucune raison d'y mettre de la friction.
+
+Les deux sont approuvées OSI, comme l'exige Community Applications. rclone est
+sous MIT et n'est pas intégré au code : l'application le lance en
+sous-processus, il n'y a donc aucune question de compatibilité de licence.

@@ -62,11 +62,10 @@ VOLUME ["/config"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3572/api/health', timeout=4).status == 200 else 1)"
 
-# La licence reste à choisir (UNRAID-005 : Community Applications exige une
-# licence OSI). Le label sera ajouté à ce moment-là.
 LABEL org.opencontainers.image.title="Cloud Sync Manager" \
       org.opencontainers.image.description="Synchronisation Cloud pour Unraid, moteur rclone" \
-      org.opencontainers.image.version="0.1.0"
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later"
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["uvicorn", "csm.main:app", "--host", "0.0.0.0", "--port", "3572"]
