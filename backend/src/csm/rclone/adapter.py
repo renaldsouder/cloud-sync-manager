@@ -177,12 +177,17 @@ class RcloneAdapter:
         *,
         dirs_only: bool = False,
         max_depth: int = 1,
+        filter_file: str | None = None,
+        extra: list[str] | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> list[dict[str, Any]]:
-        """Listing structuré (CLOUD-005)."""
+        """Listing structuré (CLOUD-005, FILT-005)."""
         arguments = ["lsjson", remote_path, "--max-depth", str(max_depth)]
         if dirs_only:
             arguments.append("--dirs-only")
+        if filter_file:
+            arguments += ["--filter-from", filter_file]
+        arguments += extra or []
         return list(self._run_json(arguments, timeout=timeout))
 
     # -- transferts ---------------------------------------------------------
@@ -198,6 +203,7 @@ class RcloneAdapter:
         checkers: int | None = None,
         bwlimit: str | None = None,
         backup_dir: str | None = None,
+        filter_file: str | None = None,
         extra: list[str] | None = None,
     ) -> list[str]:
         """Construit la ligne de commande d'un transfert.
@@ -231,6 +237,11 @@ class RcloneAdapter:
             arguments += ["--bwlimit", bwlimit]
         if backup_dir:
             arguments += ["--backup-dir", backup_dir]
+        if filter_file:
+            # Un fichier plutôt que des options répétées : pas de limite
+            # de longueur de ligne de commande, et le jeu de règles reste
+            # inspectable après coup pour le diagnostic (§14).
+            arguments += ["--filter-from", filter_file]
         arguments += extra or []
         return arguments
 

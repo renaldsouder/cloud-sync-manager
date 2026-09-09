@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Cloud-Sync-Manager</Name>
+  <Repository>ghcr.io/VOTRE-COMPTE/cloud-sync-manager:latest</Repository>
+  <Registry>https://github.com/VOTRE-COMPTE/cloud-sync-manager/pkgs/container/cloud-sync-manager</Registry>
+  <Project>https://github.com/VOTRE-COMPTE/cloud-sync-manager</Project>
+  <Support>https://forums.unraid.net/topic/XXXXXX-support-cloud-sync-manager/</Support>
+  <TemplateURL>https://raw.githubusercontent.com/VOTRE-COMPTE/unraid-templates/main/cloud-sync-manager.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/VOTRE-COMPTE/unraid-templates/main/images/cloud-sync-manager.png</Icon>
+
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <WebUI>http://[IP]:[PORT:3572]</WebUI>
+
+  <Category>Cloud: Backup: Tools:Utilities</Category>
+
+  <Overview>
+    Synchronisez vos shares Unraid avec Google Drive, OneDrive, Dropbox, S3, Backblaze B2, WebDAV ou SFTP, depuis une interface Web — sans ligne de commande.
+
+    Choisissez un stockage Cloud, un dossier local, un sens de synchronisation, planifiez, et laissez fonctionner. Moteur rclone.
+
+    Sécurité des données :
+    - aucune suppression distante activée par défaut ;
+    - simulation obligatoire avant la première exécution d'un Miroir ;
+    - une source vide ou inaccessible fait échouer la tâche au lieu de propager des suppressions ;
+    - au-delà d'un seuil configurable, la tâche se bloque et demande une validation qui nomme le nombre exact de fichiers concernés ;
+    - les suppressions sont déplacées dans une corbeille, donc récupérables.
+
+    Ni mode privilégié, ni accès au socket Docker. Les identifiants Cloud ne sont jamais affichés ni exportés.
+  </Overview>
+
+  <Config Name="WebUI" Target="3572" Default="3572" Mode="tcp"
+          Description="Port de l'interface Web."
+          Type="Port" Display="always" Required="true" Mask="false">3572</Config>
+
+  <Config Name="Appdata" Target="/config" Default="/mnt/user/appdata/cloud-sync-manager" Mode="rw"
+          Description="Configuration, base de données, journaux et fichier rclone.conf. À sauvegarder avant toute mise à jour majeure."
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/cloud-sync-manager</Config>
+
+  <Config Name="Shares Unraid" Target="/mnt/user" Default="/mnt/user" Mode="rw"
+          Description="Accès aux shares à synchroniser. Le chemin est identique des deux côtés : ce que l'application affiche est exactement ce que vous voyez dans Unraid. Pour restreindre l'accès, remplacez ce mappage par un ou plusieurs shares précis. Les shares appdata, system et domains ne peuvent jamais être une destination."
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user</Config>
+
+  <Config Name="PUID" Target="PUID" Default="99" Mode=""
+          Description="Identifiant du propriétaire des fichiers écrits. 99 = nobody."
+          Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+
+  <Config Name="PGID" Target="PGID" Default="100" Mode=""
+          Description="Groupe propriétaire des fichiers écrits. 100 = users."
+          Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+
+  <Config Name="UMASK" Target="UMASK" Default="000" Mode=""
+          Description="Droits des fichiers écrits. 000 laisse les partages SMB accessibles."
+          Type="Variable" Display="advanced" Required="false" Mask="false">000</Config>
+
+  <Config Name="TZ" Target="TZ" Default="Europe/Paris" Mode=""
+          Description="Fuseau horaire du serveur. Les heures de planification s'y réfèrent."
+          Type="Variable" Display="always" Required="false" Mask="false">Europe/Paris</Config>
+
+  <Config Name="Racines locales autorisées" Target="CSM_ALLOWED_ROOTS" Default="/mnt/user" Mode=""
+          Description="Chemins hors desquels aucune tâche ne peut sortir, séparés par des virgules. Doit correspondre aux dossiers réellement montés ci-dessus."
+          Type="Variable" Display="advanced" Required="false" Mask="false">/mnt/user</Config>
+
+  <Config Name="Rétention de la corbeille (jours)" Target="CSM_QUARANTINE_RETENTION_DAYS" Default="30" Mode=""
+          Description="Âge au-delà duquel une corbeille de suppressions est purgée."
+          Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
+
+  <Config Name="Rétention de l'historique (jours)" Target="CSM_HISTORY_RETENTION_DAYS" Default="90" Mode=""
+          Description="Âge au-delà duquel une exécution est retirée de l'historique."
+          Type="Variable" Display="advanced" Required="false" Mask="false">90</Config>
+</Container>

@@ -74,6 +74,8 @@ def create_task(
             direction=payload.direction,
             mode=payload.mode,
             schedule=payload.schedule,
+            filter_set_id=payload.filter_set_id,
+            bandwidth=payload.bandwidth,
         )
     except service.TaskError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
@@ -98,6 +100,8 @@ def update_task(
             remote_path=payload.remote_path,
             schedule=payload.schedule,
             enabled=payload.enabled,
+            filter_set_id=payload.filter_set_id,
+            bandwidth=payload.bandwidth,
         )
     except service.TaskError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

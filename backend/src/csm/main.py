@@ -18,6 +18,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from csm import __version__
+from csm.api import config as config_api
 from csm.api import dashboard, health, remotes, tasks
 from csm.config import Settings, get_settings
 from csm.db import create_db_engine, create_session_factory, sqlite_url
@@ -62,6 +63,7 @@ def _build_run_manager(app: FastAPI, settings: Settings) -> RunManager | None:
         adapter,
         quarantine_retention_days=settings.quarantine_retention_days,
         quarantine_keep_runs=settings.quarantine_keep_runs,
+        filters_dir=settings.config_dir / "filters",
     )
 
 
@@ -124,6 +126,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(remotes.router, prefix="/api")
     app.include_router(tasks.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
+    app.include_router(config_api.router, prefix="/api")
 
     if settings.web_dir.is_dir():
         # html=True sert index.html à la racine. Le repli SPA sur les routes

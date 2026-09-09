@@ -105,6 +105,8 @@ class TaskCreate(BaseModel):
     direction: str = "local_to_remote"
     mode: str = "copy"
     schedule: dict[str, Any] | None = None
+    filter_set_id: str | None = None
+    bandwidth: dict[str, Any] | None = None
 
 
 class TaskUpdate(BaseModel):
@@ -113,6 +115,8 @@ class TaskUpdate(BaseModel):
     remote_path: str | None = None
     schedule: dict[str, Any] | None = None
     enabled: bool | None = None
+    filter_set_id: str | None = None
+    bandwidth: dict[str, Any] | None = None
 
 
 class TaskRunStart(BaseModel):
@@ -143,6 +147,8 @@ class TaskOut(BaseModel):
     next_run_at: datetime | None = None
     schedule: dict[str, Any] | None = None
     schedule_label: str = "manuelle"
+    filter_set_id: str | None = None
+    bandwidth: dict[str, Any] | None = None
     live: dict[str, Any] | None = None
 
     @classmethod
@@ -165,6 +171,10 @@ class TaskOut(BaseModel):
             next_run_at=task.next_run_at,
             schedule=schedule.to_dict() if schedule.automatic else None,
             schedule_label=describe(schedule),
+            filter_set_id=task.filter_set_id,
+            bandwidth=(
+                json.loads(task.bandwidth_json) if task.bandwidth_json else None
+            ),
             live=live,
         )
 

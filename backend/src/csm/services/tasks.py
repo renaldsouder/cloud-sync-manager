@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -97,6 +98,8 @@ def create_task(
     direction: str,
     mode: str,
     schedule: dict | None = None,
+    filter_set_id: str | None = None,
+    bandwidth: dict | None = None,
     max_deletes: int | None = None,
     max_delete_percent: int | None = None,
     now: datetime | None = None,
@@ -139,6 +142,11 @@ def create_task(
         max_delete_percent if max_delete_percent is not None else default_percent
     )
 
+    if filter_set_id:
+        task.filter_set_id = filter_set_id
+    if bandwidth:
+        task.bandwidth_json = json.dumps(bandwidth)
+
     apply_schedule(task, schedule, now=now)
 
     session.add(task)
@@ -174,6 +182,8 @@ def update_task(
     remote_path: str | None = None,
     schedule: dict | None = None,
     enabled: bool | None = None,
+    filter_set_id: str | None = None,
+    bandwidth: dict | None = None,
     now: datetime | None = None,
 ) -> Task:
     if name and name != task.name:
@@ -205,6 +215,12 @@ def update_task(
 
     if schedule is not None:
         apply_schedule(task, schedule, now=now)
+
+    if filter_set_id is not None:
+        task.filter_set_id = filter_set_id or None
+
+    if bandwidth is not None:
+        task.bandwidth_json = json.dumps(bandwidth) if bandwidth else None
 
     if enabled is not None and enabled != task.enabled:
         task.enabled = enabled

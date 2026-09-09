@@ -6,13 +6,15 @@ ligne de commande.
 
 Moteur [rclone](https://rclone.org). Un seul conteneur, une seule WebUI.
 
-> **État : J5 — planification et historique.** Copie et Miroir dans les deux
-> sens, protections destructives complètes, planification sans cron avec
-> politique de rattrapage explicite, tableau de bord, historique et rétention.
+> **État : J6 — périmètre V1.** Copie et Miroir dans les deux sens, protections
+> destructives complètes, planification sans cron, tableau de bord, filtres avec
+> outil de test, limites de transfert, notifications, sauvegarde et restauration
+> de configuration, template Community Applications et documentation.
 > Le bidirectionnel reste hors périmètre tant que sa matrice de tests n'existe pas.
 
 - Cahier des charges : [`docs/Cloud_Sync_Manager_Cahier_des_charges.md`](docs/Cloud_Sync_Manager_Cahier_des_charges.md)
 - Décisions techniques : [`docs/Propositions_Techniques_Unraid.md`](docs/Propositions_Techniques_Unraid.md)
+- Installation et exploitation : [`docs/Installation_Unraid.md`](docs/Installation_Unraid.md)
 - Règles de développement : [`CLAUDE.md`](CLAUDE.md)
 
 ## Structure
@@ -21,7 +23,8 @@ Moteur [rclone](https://rclone.org). Un seul conteneur, une seule WebUI.
 backend/    API FastAPI, modèle SQLite, migrations Alembic, adaptateur rclone
 frontend/   WebUI React + TypeScript (Vite)
 docker/     Dockerfile multi-stage et entrypoint PUID/PGID
-docs/       Cahier des charges et décisions
+unraid/     Template Community Applications et profil de dépôt
+docs/       Cahier des charges, décisions et documentation d'installation
 ```
 
 ## Développement

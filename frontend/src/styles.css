@@ -662,3 +662,54 @@ body {
   border-color: var(--accent);
   color: #fff;
 }
+
+/* --- Filtres ------------------------------------------------------------- */
+
+.rules {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.rules li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.rules select {
+  flex: 0 0 220px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.rules input {
+  flex: 1;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.preview h3 {
+  margin: 16px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.preview .muted {
+  color: var(--ink-soft);
+}
+
+.path code + code {
+  margin-left: 6px;
+}

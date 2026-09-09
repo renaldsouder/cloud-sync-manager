@@ -275,3 +275,79 @@ export function formatDate(value: string | null): string {
     timeStyle: "short",
   });
 }
+
+export type FilterRule = { type: string; value: string };
+
+export type FilterSet = {
+  id: string;
+  name: string;
+  rules: FilterRule[];
+  compiled: string[];
+  task_count: number;
+};
+
+export type FilterPreview = {
+  included: string[];
+  excluded: { path: string; reason: string }[];
+  truncated: boolean;
+};
+
+export type NotificationSettings = {
+  unraid_url: string;
+  unraid_api_key_configured: boolean;
+  webhook_url: string;
+  events: string[];
+};
+
+export const fetchFilterSets = (signal?: AbortSignal) =>
+  request<FilterSet[]>("/api/filter-sets", { signal });
+
+export const createFilterSet = (body: { name: string; rules: FilterRule[] }) =>
+  request<FilterSet>("/api/filter-sets", { method: "POST", body: JSON.stringify(body) });
+
+export const updateFilterSet = (id: string, body: { name: string; rules: FilterRule[] }) =>
+  request<FilterSet>(`/api/filter-sets/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const deleteFilterSet = (id: string) =>
+  request<void>(`/api/filter-sets/${id}`, { method: "DELETE" });
+
+export const previewFilterSet = (id: string, path: string) =>
+  request<FilterPreview>(`/api/filter-sets/${id}/preview`, {
+    method: "POST",
+    body: JSON.stringify({ path }),
+  });
+
+export const fetchSettings = (signal?: AbortSignal) =>
+  request<{ notifications: NotificationSettings; events: string[] }>("/api/settings", {
+    signal,
+  });
+
+export const saveSettings = (body: {
+  unraid_url?: string;
+  unraid_api_key?: string;
+  webhook_url?: string;
+  events?: string[];
+}) =>
+  request<{ notifications: NotificationSettings }>("/api/settings", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+
+export const testNotifications = () =>
+  request<{ delivered: boolean; detail: string }>("/api/settings/notifications/test", {
+    method: "POST",
+  });
+
+export const exportConfig = () => request<Record<string, unknown>>("/api/config/export");
+
+export const importConfig = (payload: unknown) =>
+  request<{
+    remotes_created: number;
+    filter_sets_created: number;
+    tasks_created: number;
+    skipped: string[];
+    warnings: string[];
+  }>("/api/config/import", { method: "POST", body: JSON.stringify(payload) });

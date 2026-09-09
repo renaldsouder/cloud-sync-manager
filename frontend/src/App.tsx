@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import DashboardView from "./DashboardView";
 import RemotesView from "./RemotesView";
+import SettingsView from "./SettingsView";
 import TasksView from "./TasksView";
 import { fetchHealth, type Health } from "./api";
 
@@ -10,7 +11,7 @@ const LABELS: Record<string, string> = {
   rclone: "Moteur rclone",
 };
 
-type Tab = "bord" | "taches" | "stockages" | "etat";
+type Tab = "bord" | "taches" | "stockages" | "parametres" | "etat";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("bord");
@@ -45,6 +46,7 @@ export default function App() {
               ["bord", "Tableau de bord"],
               ["taches", "Tâches"],
               ["stockages", "Stockages Cloud"],
+              ["parametres", "Paramètres"],
               ["etat", "État"],
             ] as [Tab, string][]
           ).map(([value, label]) => (
@@ -66,6 +68,8 @@ export default function App() {
         <TasksView />
       ) : tab === "stockages" ? (
         <RemotesView />
+      ) : tab === "parametres" ? (
+        <SettingsView />
       ) : (
         <section className="card">
           <h2>État du service</h2>
@@ -97,8 +101,8 @@ export default function App() {
       )}
 
       <footer className="shell__footer">
-        Copie et Miroir dans les deux sens, simulation, protections destructives,
-        planification et historique (J5).
+        Copie et Miroir dans les deux sens, protections destructives, planification,
+        filtres, notifications et sauvegarde de configuration (J6).
       </footer>
     </main>
   );

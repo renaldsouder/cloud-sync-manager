@@ -24,16 +24,19 @@ import subprocess
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from csm.db.models import Remote, Task, TaskEvent, TaskRun, new_id
+from csm.db.models import FilterSet, Remote, Task, TaskEvent, TaskRun, new_id
 from csm.rclone import events as rclone_events
 from csm.rclone.adapter import RcloneAdapter, RcloneError
 from csm.rclone.events import RcloneEvent
 from csm.services import guards
+from csm.services import notifications, settings_store
+from csm.services.filters import FilterError, compile_filters, parse_rules
 from csm.services.guards import DeletionPlan, GuardBlocked
 
 logger = logging.getLogger("csm.runner")
@@ -65,6 +68,9 @@ class RunPlan:
     dry_run: bool
     confirm_deletions: bool = False
     bwlimit: str | None = None
+    transfers: int | None = None
+    checkers: int | None = None
+    filter_file: str | None = None
     max_deletes: int | None = None
     max_delete_percent: int | None = None
     quarantine: bool = True
@@ -150,9 +156,11 @@ class RunManager:
         *,
         quarantine_retention_days: int = 30,
         quarantine_keep_runs: int = 3,
+        filters_dir: Path | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._adapter = adapter
+        self._filters_dir = filters_dir
         self._retention_days = quarantine_retention_days
         self._keep_runs = quarantine_keep_runs
         self._runs: dict[str, LiveRun] = {}
@@ -217,13 +225,17 @@ class RunManager:
                 raise RunError("le stockage associé à cette tâche a disparu")
 
             source, destination = endpoints(task, remote)
+            performance = _performance(task)
             plan = RunPlan(
                 operation="sync" if task.mode == "mirror" else "copy",
                 source=source,
                 destination=destination,
                 dry_run=dry_run,
                 confirm_deletions=confirm_deletions,
-                bwlimit=_bandwidth_limit(task),
+                bwlimit=performance.get("limit"),
+                transfers=performance.get("transfers"),
+                checkers=performance.get("checkers"),
+                filter_file=_write_filter_file(session, task, self._filters_dir),
                 max_deletes=task.max_deletes,
                 max_delete_percent=task.max_delete_percent,
                 quarantine=task.quarantine_enabled,
@@ -294,6 +306,7 @@ class RunManager:
                 except GuardBlocked as exc:
                     self._finalise_blocked(live, session, str(exc))
                     session.commit()
+                    self._notify(live, 'blocked', str(exc))
                     return
 
                 if live.cancelled:
@@ -323,6 +336,7 @@ class RunManager:
                     self._store_planned_deletions(live, session, deletion_plan)
                     self._finalise_blocked(live, session, reason)
                     session.commit()
+                    self._notify(live, 'blocked', reason)
                     return
 
             live.phase = "transfert"
@@ -334,6 +348,7 @@ class RunManager:
                 self._purge_quarantine(live, plan, session)
 
             session.commit()
+            self._notify(live, live.status, live.last_error)
         except Exception:  # pragma: no cover - filet de sécurité du fil
             logger.exception("exécution %s interrompue par une erreur interne", live.run_id)
             session.rollback()
@@ -369,7 +384,10 @@ class RunManager:
             plan.destination,
             dry_run=plan.dry_run,
             bwlimit=plan.bwlimit,
+            transfers=plan.transfers,
+            checkers=plan.checkers,
             backup_dir=backup_dir,
+            filter_file=plan.filter_file,
             extra=extra,
         )
 
@@ -394,6 +412,9 @@ class RunManager:
             plan.destination,
             dry_run=True,
             bwlimit=plan.bwlimit,
+            transfers=plan.transfers,
+            checkers=plan.checkers,
+            filter_file=plan.filter_file,
             # La corbeille doit être exclue ici aussi : sans cela, la
             # simulation compterait comme « à supprimer » tout ce qu'une
             # exécution précédente y a déposé, et ferait franchir le seuil
@@ -495,6 +516,31 @@ class RunManager:
                     )
                 )
         return stored
+
+    def _notify(self, live: LiveRun, status: str, detail: str | None) -> None:
+        """Alerte l'utilisateur d'une exécution qui demande une action (§15).
+
+        Après la validation en base et dans une session à part : une
+        notification qui traîne ne doit pas retenir une transaction, et un
+        canal injoignable ne doit jamais faire échouer une synchronisation.
+        """
+        event = notifications.event_for(status)
+        if event is None:
+            return
+
+        session = self._session_factory()
+        try:
+            config = settings_store.notification_config(session)
+            if not config.configured or not config.wants(event):
+                return
+            subject, description = notifications.summarise_run(
+                live.task_name, status, detail
+            )
+            notifications.Notifier(config).notify(event, subject, description)
+        except Exception:  # pragma: no cover - une alerte n'échoue jamais bruyamment
+            logger.warning("notification non envoyée", exc_info=True)
+        finally:
+            session.close()
 
     def _purge_quarantine(self, live: LiveRun, plan: RunPlan, session: Session) -> None:
         """Applique la rétention aux corbeilles (§16 — pas de croissance illimitée).
@@ -694,19 +740,57 @@ def _summary_json(live: LiveRun) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
-def _bandwidth_limit(task: Task) -> str | None:
-    """Limite de débit stockée sur la tâche (PERF-002).
+def _performance(task: Task) -> dict[str, Any]:
+    """Réglages de transfert de la tâche (PERF-001, PERF-002).
 
-    Format rclone : ``1M``, ``500k``, ou ``2M:1M`` pour montant:descendant.
+    ``limit`` suit le format rclone : ``1M``, ``500k``, ou ``2M:1M`` pour
+    montant:descendant.
     """
     if not task.bandwidth_json:
-        return None
+        return {}
     try:
         payload = json.loads(task.bandwidth_json)
     except ValueError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+
+    settings: dict[str, Any] = {}
+    if payload.get("limit"):
+        settings["limit"] = str(payload["limit"])
+    for key in ("transfers", "checkers"):
+        value = payload.get(key)
+        if isinstance(value, int) and value > 0:
+            settings[key] = value
+    return settings
+
+
+def _write_filter_file(session: Session, task: Task, directory: Path | None) -> str | None:
+    """Matérialise le jeu de filtres de la tâche pour ``--filter-from``.
+
+    Le fichier est réécrit à chaque exécution et conservé : il documente
+    exactement ce qui a été appliqué, ce dont le diagnostic a besoin (§14).
+    """
+    if not task.filter_set_id or directory is None:
         return None
-    limit = payload.get("limit") if isinstance(payload, dict) else None
-    return str(limit) if limit else None
+
+    filter_set = session.get(FilterSet, task.filter_set_id)
+    if filter_set is None:
+        return None
+
+    try:
+        compiled = compile_filters(parse_rules(json.loads(filter_set.rules_json or "[]")))
+    except (ValueError, FilterError):
+        logger.warning("jeu de filtres « %s » illisible, ignoré", filter_set.name)
+        return None
+
+    if not compiled.lines:
+        return None
+
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{task.id}.filter"
+    path.write_text(compiled.as_text(), encoding="utf-8")
+    return str(path)
 
 
 def _version_or_none(adapter: RcloneAdapter) -> str | None:

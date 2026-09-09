@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<Profile>
+  <Author>VOTRE-COMPTE</Author>
+  <Repository>https://github.com/VOTRE-COMPTE/unraid-templates</Repository>
+  <Support>https://forums.unraid.net/topic/XXXXXX-support-cloud-sync-manager/</Support>
+  <Description>
+    Applications maintenues par VOTRE-COMPTE pour Unraid.
+  </Description>
+</Profile>
