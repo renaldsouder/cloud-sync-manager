@@ -87,6 +87,9 @@ Tout l'état persistant vit sous `/config` (appdata Unraid) : base SQLite,
 - Aucun secret Cloud en base : ils vivent dans le `rclone.conf` chiffré.
 - Aucun secret en argument de commande — `argv` est lisible via `/proc`.
 - Filtre de redaction centralisé avant tout log, export ou diagnostic.
+- Interface protégeable par mot de passe (empreinte `scrypt` salée, session
+  signée, tentatives ralenties) — désactivée par défaut, signalée tant qu'elle
+  ne l'est pas.
 - Ni `--privileged`, ni accès au socket Docker.
 - Aucune suppression distante activée par défaut ; simulation obligatoire
   avant la première exécution destructive.

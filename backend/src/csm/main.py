@@ -16,14 +16,19 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette import status
 
 from csm import __version__
+from csm.api import auth as auth_api
 from csm.api import config as config_api
 from csm.api import dashboard, health, remotes, tasks
 from csm.config import Settings, get_settings
 from csm.db import create_db_engine, create_session_factory, sqlite_url
 from csm.db.migrate import upgrade_to_head
 from csm.rclone.adapter import RcloneAdapter, RcloneUnavailable
+from csm.api.auth import PASSWORD_KEY
+from csm.services import auth as csm_auth
+from csm.services import settings_store
 from csm.services.runner import RunManager, mark_orphan_runs_interrupted
 from csm.services.scheduler import Scheduler
 
@@ -44,6 +49,45 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         for header, value in SECURITY_HEADERS.items():
             response.headers.setdefault(header, value)
         return response
+
+
+class AuthenticationMiddleware(BaseHTTPMiddleware):
+    """Exige une session valide sur l'API dès qu'un mot de passe est défini.
+
+    Restent ouverts : les fichiers de l'interface — qui doivent pouvoir
+    s'afficher pour proposer l'écran de connexion —, les points
+    d'authentification eux-mêmes, et ``/api/health``, cible du HEALTHCHECK
+    Docker et qui ne révèle qu'un numéro de version.
+    """
+
+    OPEN_PATHS = ("/api/health", "/api/auth/")
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        path = request.url.path
+        if not path.startswith("/api") or path.startswith(self.OPEN_PATHS):
+            return await call_next(request)
+
+        factory = getattr(request.app.state, "session_factory", None)
+        if factory is None:  # pragma: no cover - avant le démarrage complet
+            return await call_next(request)
+
+        session = factory()
+        try:
+            stored = settings_store.get(session, PASSWORD_KEY)
+        finally:
+            session.close()
+
+        if not stored:
+            # Protection non activée : comportement inchangé.
+            return await call_next(request)
+
+        token = request.cookies.get(csm_auth.SESSION_COOKIE)
+        if csm_auth.read_token(token, request.app.state.auth_secret) is None:
+            return JSONResponse(
+                {"detail": "authentification requise"},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        return await call_next(request)
 
 
 def _build_run_manager(app: FastAPI, settings: Settings) -> RunManager | None:
@@ -98,6 +142,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_db_engine(settings.db_path)
         app.state.settings = settings
         app.state.engine = engine
+        # Clé de signature des sessions : créée au premier démarrage,
+        # sa suppression révoque toutes les sessions ouvertes.
+        app.state.auth_secret = csm_auth.load_or_create_secret(
+            settings.config_dir / "session.key"
+        )
+        app.state.login_throttle = csm_auth.LoginThrottle()
         app.state.session_factory = create_session_factory(engine)
         mark_orphan_runs_interrupted(app.state.session_factory)
         app.state.run_manager = _build_run_manager(app, settings)
@@ -122,6 +172,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/api/openapi.json",
     )
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(AuthenticationMiddleware)
+    app.include_router(auth_api.router, prefix="/api")
     app.include_router(health.router, prefix="/api")
     app.include_router(remotes.router, prefix="/api")
     app.include_router(tasks.router, prefix="/api")

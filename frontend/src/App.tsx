@@ -1,10 +1,17 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import DashboardView from "./DashboardView";
+import LoginView from "./LoginView";
 import RemotesView from "./RemotesView";
 import SettingsView from "./SettingsView";
 import TasksView from "./TasksView";
-import { fetchHealth, type Health } from "./api";
+import {
+  fetchAuthSession,
+  fetchHealth,
+  logout,
+  type AuthState,
+  type Health,
+} from "./api";
 
 const LABELS: Record<string, string> = {
   database: "Base de configuration",
@@ -17,6 +24,21 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("bord");
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [auth, setAuth] = useState<AuthState | null>(null);
+
+  const refreshAuth = useCallback(async () => {
+    try {
+      setAuth(await fetchAuthSession());
+    } catch {
+      // L'écran d'état signalera l'API injoignable ; ne pas verrouiller
+      // l'interface sur une erreur réseau passagère.
+      setAuth({ enabled: false, authenticated: true });
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshAuth();
+  }, [refreshAuth]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -32,6 +54,11 @@ export default function App() {
       });
     return () => controller.abort();
   }, []);
+
+  if (auth === null) return null;
+  if (auth.enabled && !auth.authenticated) {
+    return <LoginView onAuthenticated={() => void refreshAuth()} />;
+  }
 
   return (
     <main className="shell">
@@ -60,6 +87,15 @@ export default function App() {
             </button>
           ))}
         </nav>
+        {auth.enabled && (
+          <button
+            type="button"
+            className="btn btn--small btn--ghost shell__logout"
+            onClick={() => void logout().then(refreshAuth)}
+          >
+            Se déconnecter
+          </button>
+        )}
       </header>
 
       {tab === "bord" ? (

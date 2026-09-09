@@ -713,3 +713,20 @@ body {
 .path code + code {
   margin-left: 6px;
 }
+
+/* --- Connexion ----------------------------------------------------------- */
+
+.shell--narrow {
+  max-width: 460px;
+  padding-top: 96px;
+}
+
+.shell__logout {
+  position: absolute;
+  top: 40px;
+  right: 20px;
+}
+
+.shell {
+  position: relative;
+}

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import FiltersPanel from "./FiltersPanel";
+import PasswordPanel from "./PasswordPanel";
 import {
   exportConfig,
+  fetchAuthSession,
   fetchSettings,
   importConfig,
   saveSettings,
   testNotifications,
+  type AuthState,
   type NotificationSettings,
 } from "./api";
 
@@ -19,6 +22,7 @@ const EVENT_LABELS: Record<string, string> = {
 
 export default function SettingsView() {
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
+  const [auth, setAuth] = useState<AuthState | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -30,6 +34,7 @@ export default function SettingsView() {
       const payload = await fetchSettings();
       setSettings(payload.notifications);
       setEvents(payload.events);
+      setAuth(await fetchAuthSession());
       setError(null);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -96,6 +101,8 @@ export default function SettingsView() {
 
   return (
     <>
+      {auth && <PasswordPanel auth={auth} onChanged={() => void reload()} />}
+
       <section className="card">
         <h2>Notifications</h2>
         {error && <p className="state state--error">{error}</p>}

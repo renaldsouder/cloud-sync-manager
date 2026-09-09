@@ -238,8 +238,31 @@ masquage centralisé.
 
 ---
 
-## 10. Exposition hors du réseau local
+## 10. Protéger l'interface
 
-L'interface n'est pas destinée à être publiée directement sur Internet.
-Placez-la derrière un reverse proxy HTTPS — SWAG, Nginx Proxy Manager — et
-n'ouvrez aucun port depuis votre box.
+À l'installation, **l'interface n'est protégée par aucun mot de passe** :
+toute personne pouvant joindre le port sur votre réseau peut créer une tâche
+et déclencher des suppressions. C'est le défaut retenu pour ne pas verrouiller
+les installations existantes lors d'une mise à jour, mais l'application vous le
+signale tant que ce n'est pas fait.
+
+**Paramètres → Accès à l'interface**, choisissez un mot de passe d'au moins
+huit caractères. Vous restez connecté ensuite ; cochez « rester connecté » pour
+trente jours sur ce navigateur.
+
+Le mot de passe est conservé sous forme d'empreinte `scrypt` salée — il n'est
+stocké nulle part en clair et ne peut pas être relu. Les tentatives répétées
+depuis une même origine sont ralenties après cinq échecs.
+
+**Mot de passe perdu ?** Depuis l'appdata du conteneur, supprimez le fichier
+`session.key` et l'entrée `auth.password_hash` de la base : l'interface
+redevient ouverte, et vous pouvez en définir un nouveau.
+
+### Accès depuis l'extérieur
+
+N'ouvrez **jamais** ce port directement depuis votre box. L'application parle
+en HTTP simple, sans chiffrement : le mot de passe circulerait en clair.
+
+Pour un accès distant, placez-la derrière un reverse proxy HTTPS — SWAG ou
+Nginx Proxy Manager — qui portera le certificat. Le mot de passe de
+l'application vient alors en complément du chiffrement, pas à sa place.

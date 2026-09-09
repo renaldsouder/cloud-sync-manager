@@ -355,3 +355,25 @@ export const importConfig = (payload: unknown) =>
     skipped: string[];
     warnings: string[];
   }>("/api/config/import", { method: "POST", body: JSON.stringify(payload) });
+
+export type AuthState = { enabled: boolean; authenticated: boolean };
+
+export const fetchAuthSession = (signal?: AbortSignal) =>
+  request<AuthState>("/api/auth/session", { signal });
+
+export const login = (password: string, remember: boolean) =>
+  request<{ authenticated: boolean }>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ password, remember }),
+  });
+
+export const logout = () =>
+  request<{ authenticated: boolean }>("/api/auth/logout", { method: "POST" });
+
+export const setPassword = (body: {
+  current_password?: string;
+  new_password: string;
+}) => request<{ enabled: boolean }>("/api/auth/password", {
+  method: "PUT",
+  body: JSON.stringify(body),
+});
