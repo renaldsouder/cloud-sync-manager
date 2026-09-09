@@ -185,6 +185,77 @@ class RcloneAdapter:
             arguments.append("--dirs-only")
         return list(self._run_json(arguments, timeout=timeout))
 
+    # -- transferts ---------------------------------------------------------
+
+    def build_transfer_args(
+        self,
+        operation: str,
+        source: str,
+        destination: str,
+        *,
+        dry_run: bool = False,
+        transfers: int | None = None,
+        checkers: int | None = None,
+        bwlimit: str | None = None,
+        backup_dir: str | None = None,
+        extra: list[str] | None = None,
+    ) -> list[str]:
+        """Construit la ligne de commande d'un transfert.
+
+        Fonction pure et donc testable : le §20.3 exige que la simulation
+        soit cohérente avec l'exécution réelle, et c'est vérifiable ici —
+        les deux listes ne diffèrent que par ``--dry-run``.
+        """
+        if operation not in {"copy", "sync"}:
+            raise ValueError(f"opération non supportée : {operation}")
+
+        arguments = [
+            operation,
+            source,
+            destination,
+            "--use-json-log",
+            "--log-level",
+            "INFO",
+            "--stats",
+            "1s",
+            "--stats-log-level",
+            "NOTICE",
+        ]
+        if dry_run:
+            arguments.append("--dry-run")
+        if transfers:
+            arguments += ["--transfers", str(transfers)]
+        if checkers:
+            arguments += ["--checkers", str(checkers)]
+        if bwlimit:
+            arguments += ["--bwlimit", bwlimit]
+        if backup_dir:
+            arguments += ["--backup-dir", backup_dir]
+        arguments += extra or []
+        return arguments
+
+    def start(self, arguments: list[str]) -> subprocess.Popen[str]:
+        """Démarre un transfert et rend la main immédiatement.
+
+        ``stdout`` est ignoré : rclone n'y écrit rien en mode journal JSON.
+        Tout passe par ``stderr``, lu ligne à ligne par l'appelant.
+        """
+        command = [self.binary, "--config", str(self.config_path), *arguments]
+        try:
+            return subprocess.Popen(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                shell=False,
+                env=self._environment(),
+            )
+        except FileNotFoundError as exc:
+            raise RcloneUnavailable(f"binaire rclone introuvable : {self.binary}") from exc
+
     def about(self, remote: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | None:
         """Quotas du stockage. ``None`` si le backend ne sait pas répondre.
 

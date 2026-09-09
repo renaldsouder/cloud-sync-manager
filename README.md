@@ -6,9 +6,10 @@ ligne de commande.
 
 Moteur [rclone](https://rclone.org). Un seul conteneur, une seule WebUI.
 
-> **État : J2 — stockages Cloud.** Création, test, modification et suppression
-> d'un stockage distant depuis la WebUI. Les tâches de synchronisation (J3)
-> suivent.
+> **État : J3 — tâches unidirectionnelles.** Copie Local → Cloud et Cloud →
+> Local, simulation, lancement manuel, progression temps réel, arrêt propre et
+> historique. Le Miroir est configurable mais **pas encore exécutable** : il
+> attend ses protections contre les suppressions (J4).
 
 - Cahier des charges : [`docs/Cloud_Sync_Manager_Cahier_des_charges.md`](docs/Cloud_Sync_Manager_Cahier_des_charges.md)
 - Décisions techniques : [`docs/Propositions_Techniques_Unraid.md`](docs/Propositions_Techniques_Unraid.md)

@@ -18,10 +18,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from csm import __version__
-from csm.api import health, remotes
+from csm.api import health, remotes, tasks
 from csm.config import Settings, get_settings
 from csm.db import create_db_engine, create_session_factory, sqlite_url
 from csm.db.migrate import upgrade_to_head
+from csm.rclone.adapter import RcloneAdapter, RcloneUnavailable
+from csm.services.runner import RunManager
 
 logger = logging.getLogger("csm")
 
@@ -42,6 +44,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+def _build_run_manager(app: FastAPI, settings: Settings) -> RunManager | None:
+    """Le gestionnaire d'exécutions n'existe que si rclone est présent.
+
+    Son absence ne doit pas empêcher l'application de démarrer : la WebUI
+    doit pouvoir afficher un diagnostic plutôt qu'un conteneur mort.
+    """
+    try:
+        adapter = RcloneAdapter.from_settings(settings)
+    except RcloneUnavailable:
+        logger.warning("rclone introuvable : les exécutions sont désactivées")
+        return None
+    adapter.config_password = settings.rclone_config_password
+    return RunManager(app.state.session_factory, adapter)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
@@ -53,10 +70,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = settings
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
+        app.state.run_manager = _build_run_manager(app, settings)
         logger.info("Cloud Sync Manager %s prêt sur %s", __version__, settings.config_dir)
         try:
             yield
         finally:
+            if app.state.run_manager is not None:
+                # Une exécution laissée derrière serait comptée « Réussie »
+                # au prochain démarrage alors qu'elle a été coupée (§8.5).
+                app.state.run_manager.stop_all()
             engine.dispose()
 
     app = FastAPI(
@@ -69,6 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     app.include_router(health.router, prefix="/api")
     app.include_router(remotes.router, prefix="/api")
+    app.include_router(tasks.router, prefix="/api")
 
     if settings.web_dir.is_dir():
         # html=True sert index.html à la racine. Le repli SPA sur les routes

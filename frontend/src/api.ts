@@ -96,3 +96,108 @@ export const testRemote = (id: string) =>
 
 export const deleteRemote = (id: string) =>
   request<void>(`/api/remotes/${id}`, { method: "DELETE" });
+
+export type LiveRun = {
+  run_id: string;
+  task_id: string;
+  task_name: string;
+  dry_run: boolean;
+  status: string;
+  current_file: string | null;
+  counters: { transfers: number; deletes: number; errors: number };
+  stats: {
+    bytes?: number;
+    total_bytes?: number;
+    transfers?: number;
+    total_transfers?: number;
+    speed?: number;
+    eta?: number | null;
+    errors?: number;
+  };
+  last_error: string | null;
+};
+
+export type Task = {
+  id: string;
+  name: string;
+  remote_id: string;
+  local_path: string;
+  remote_path: string;
+  direction: "local_to_remote" | "remote_to_local";
+  mode: "copy" | "mirror" | "bisync";
+  delete_policy: string;
+  quarantine_enabled: boolean;
+  dry_run_required: boolean;
+  enabled: boolean;
+  status: string;
+  last_run_id: string | null;
+  live: LiveRun | null;
+};
+
+export type Run = {
+  id: string;
+  task_id: string;
+  started_at: string;
+  ended_at: string | null;
+  status: string;
+  exit_code: number | null;
+  transferred_files: number;
+  transferred_bytes: number;
+  deleted_files: number;
+  errors_count: number;
+  dry_run: boolean;
+  rclone_version: string | null;
+  live: LiveRun | null;
+};
+
+export const fetchTasks = (signal?: AbortSignal) =>
+  request<Task[]>("/api/tasks", { signal });
+
+export const createTask = (body: {
+  name: string;
+  remote_id: string;
+  local_path: string;
+  remote_path: string;
+  direction: string;
+  mode: string;
+}) => request<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) });
+
+export const deleteTask = (id: string) =>
+  request<void>(`/api/tasks/${id}`, { method: "DELETE" });
+
+export const runTask = (id: string, dryRun: boolean) =>
+  request<Run>(`/api/tasks/${id}/run`, {
+    method: "POST",
+    body: JSON.stringify({ dry_run: dryRun }),
+  });
+
+export const stopRun = (runId: string) =>
+  request<Run>(`/api/runs/${runId}/stop`, { method: "POST" });
+
+export const fetchRuns = (taskId: string, signal?: AbortSignal) =>
+  request<Run[]>(`/api/tasks/${taskId}/runs`, { signal });
+
+/** Flux SSE de progression (UI-003). Rend une fonction de désabonnement. */
+export function subscribeToRuns(onUpdate: (runs: LiveRun[]) => void): () => void {
+  const source = new EventSource("/api/stream/runs");
+  source.onmessage = (event) => {
+    try {
+      onUpdate(JSON.parse(event.data) as LiveRun[]);
+    } catch {
+      /* trame incomplète : la suivante arrive dans une seconde */
+    }
+  };
+  return () => source.close();
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  const units = ["Kio", "Mio", "Gio", "Tio"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+}

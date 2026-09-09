@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import RemotesView from "./RemotesView";
+import TasksView from "./TasksView";
 import { fetchHealth, type Health } from "./api";
 
 const LABELS: Record<string, string> = {
@@ -8,10 +9,10 @@ const LABELS: Record<string, string> = {
   rclone: "Moteur rclone",
 };
 
-type Tab = "etat" | "stockages";
+type Tab = "taches" | "stockages" | "etat";
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("etat");
+  const [tab, setTab] = useState<Tab>("taches");
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,24 +39,28 @@ export default function App() {
           Synchronisation Cloud pour Unraid{health ? ` — version ${health.version}` : ""}
         </p>
         <nav className="tabs">
-          <button
-            type="button"
-            className={tab === "etat" ? "tab tab--active" : "tab"}
-            onClick={() => setTab("etat")}
-          >
-            État
-          </button>
-          <button
-            type="button"
-            className={tab === "stockages" ? "tab tab--active" : "tab"}
-            onClick={() => setTab("stockages")}
-          >
-            Stockages Cloud
-          </button>
+          {(
+            [
+              ["taches", "Tâches"],
+              ["stockages", "Stockages Cloud"],
+              ["etat", "État"],
+            ] as [Tab, string][]
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={tab === value ? "tab tab--active" : "tab"}
+              onClick={() => setTab(value)}
+            >
+              {label}
+            </button>
+          ))}
         </nav>
       </header>
 
-      {tab === "stockages" ? (
+      {tab === "taches" ? (
+        <TasksView />
+      ) : tab === "stockages" ? (
         <RemotesView />
       ) : (
         <section className="card">
@@ -88,8 +93,8 @@ export default function App() {
       )}
 
       <footer className="shell__footer">
-        Stockages Cloud disponibles (J2). Les tâches de synchronisation arrivent à
-        l'étape suivante.
+        Copie Local ↔ Cloud, simulation, progression et arrêt (J3). Le Miroir et
+        ses protections contre les suppressions arrivent à l'étape suivante.
       </footer>
     </main>
   );

@@ -94,3 +94,118 @@ class RemoteTestOut(BaseModel):
     elapsed_ms: int
     capabilities: dict[str, Any]
     entries: list[str]
+
+
+class TaskCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    remote_id: str
+    local_path: str
+    remote_path: str = ""
+    direction: str = "local_to_remote"
+    mode: str = "copy"
+
+
+class TaskUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    local_path: str | None = None
+    remote_path: str | None = None
+
+
+class TaskRunStart(BaseModel):
+    #: La simulation est le défaut : il faut demander explicitement à écrire.
+    dry_run: bool = True
+
+
+class TaskOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    remote_id: str
+    local_path: str
+    remote_path: str
+    direction: str
+    mode: str
+    delete_policy: str
+    quarantine_enabled: bool
+    dry_run_required: bool
+    enabled: bool
+    status: str
+    last_run_id: str | None = None
+    next_run_at: datetime | None = None
+    live: dict[str, Any] | None = None
+
+    @classmethod
+    def build(cls, task: Any, *, live: dict[str, Any] | None = None) -> "TaskOut":
+        return cls(
+            id=task.id,
+            name=task.name,
+            remote_id=task.remote_id,
+            local_path=task.local_path,
+            remote_path=task.remote_path,
+            direction=task.direction,
+            mode=task.mode,
+            delete_policy=task.delete_policy,
+            quarantine_enabled=task.quarantine_enabled,
+            dry_run_required=task.dry_run_required,
+            enabled=task.enabled,
+            status=task.status,
+            last_run_id=task.last_run_id,
+            next_run_at=task.next_run_at,
+            live=live,
+        )
+
+
+class RunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    task_id: str
+    started_at: datetime
+    ended_at: datetime | None = None
+    status: str
+    exit_code: int | None = None
+    transferred_files: int = 0
+    transferred_bytes: int = 0
+    deleted_files: int = 0
+    errors_count: int = 0
+    dry_run: bool = False
+    rclone_version: str | None = None
+    summary: dict[str, Any] | None = None
+    live: dict[str, Any] | None = None
+
+    @classmethod
+    def build(cls, run: Any, *, live: Any = None) -> "RunOut":
+        summary: dict[str, Any] | None = None
+        if run.summary_json:
+            try:
+                summary = json.loads(run.summary_json)
+            except ValueError:
+                summary = None
+        return cls(
+            id=run.id,
+            task_id=run.task_id,
+            started_at=run.started_at,
+            ended_at=run.ended_at,
+            status=run.status,
+            exit_code=run.exit_code,
+            transferred_files=run.transferred_files,
+            transferred_bytes=run.transferred_bytes,
+            deleted_files=run.deleted_files,
+            errors_count=run.errors_count,
+            dry_run=run.dry_run,
+            rclone_version=run.rclone_version,
+            summary=summary,
+            live=live.snapshot() if live is not None else None,
+        )
+
+
+class TaskEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: str
+    at: datetime
+    path: str | None = None
+    size: int | None = None
+    message: str | None = None
