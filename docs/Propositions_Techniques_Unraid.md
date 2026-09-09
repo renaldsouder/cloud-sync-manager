@@ -134,11 +134,15 @@ Google Drive, OneDrive et Dropbox exigent un aller-retour navigateur. `rclone au
 
 **Proposition : A par défaut (fiable, documentable, testable), B offert en raccourci quand la topologie s'y prête, C étudié seulement si l'application devient populaire.** C'est le vrai point dur du parcours **FIRST-002 / CLOUD-003 / SEC-003**, à arbitrer avant le J2.
 
-### P10 — Notifications Unraid
+### P10 — Notifications Unraid ✅ **(éprouvé sur serveur réel le 09/09/2026)**
 
 **Recommandation : l'API GraphQL officielle Unraid (intégrée à l'OS depuis la 7.2), en-tête `x-api-key`, endpoint `http://<ip-serveur>/graphql`.**
 
-L'ancienne méthode — monter `/usr/local/emhttp` et appeler le script `notify` — imposerait un montage du système hôte, contraire au §5.3 et à **SEC-004**. L'API officielle ne demande qu'une clé, saisie par l'utilisateur dans nos paramètres, et se dégrade proprement : pas de clé ⇒ notifications désactivées, jamais d'échec de tâche. Répond à **NOTIF-002** ; à valider sur une 7.2 réelle — c'est la **question 5 du §25**.
+L'ancienne méthode — monter `/usr/local/emhttp` et appeler le script `notify` — imposerait un montage du système hôte, contraire au §5.3 et à **SEC-004**. L'API officielle ne demande qu'une clé, saisie par l'utilisateur dans nos paramètres, et se dégrade proprement : pas de clé ⇒ notifications désactivées, jamais d'échec de tâche. Répond à **NOTIF-002**.
+
+**Validé.** La mutation `notifyIfUnique` est acceptée avec `title`, `subject`, `description` et `importance`, et la permission `NOTIFICATIONS:CREATE_ANY` suffit — le rôle `admin` n'est pas nécessaire. La **question 5 du §25** se referme dès confirmation de l'affichage côté Unraid.
+
+**L'obstacle n'était pas là où on le cherchait.** Un serveur Unraid en HTTPS présente par défaut un **certificat auto-signé** : le client refusait la connexion avant même de l'établir, et l'on soupçonnait la mutation alors que la requête ne partait jamais. D'où le réglage « accepter un certificat auto-signé », désactivé par défaut. À retenir pour tout futur canal sortant vers une machine du réseau local — et à retenir aussi que l'interface doit rendre la cause, faute de quoi le diagnostic passe par les journaux du conteneur.
 
 ### P11 — Protection de la WebUI (SEC-006)
 
