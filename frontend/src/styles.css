@@ -112,7 +112,7 @@ body {
   background: var(--ok);
 }
 
-.dot--ko {
+.dot--ko, .dot--error {
   background: var(--ko);
 }
 
@@ -131,4 +131,267 @@ body {
   color: var(--ink-soft);
   font-size: 12.5px;
   line-height: 1.6;
+}
+
+/* --- Navigation ---------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab--active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+/* --- Blocs --------------------------------------------------------------- */
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card__head h2 {
+  margin: 0;
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--ghost {
+  background: none;
+  border-color: var(--line);
+  color: var(--ink-soft);
+}
+
+.btn--small {
+  padding: 5px 11px;
+  font-size: 12.5px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+/* --- Assistant ----------------------------------------------------------- */
+
+.providers {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.provider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.provider:hover {
+  border-color: var(--accent);
+}
+
+.badge {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.notice {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  font-size: 13px;
+}
+
+.notice p {
+  margin: 6px 0 10px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.notice pre {
+  margin: 0;
+  padding: 9px 11px;
+  background: var(--bg);
+  border-radius: 5px;
+  font-size: 12.5px;
+  overflow-x: auto;
+}
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.field__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+.field__required {
+  color: var(--accent);
+  font-weight: 400;
+  font-size: 11.5px;
+}
+
+.field input {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.field__help {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* --- Liste des stockages ------------------------------------------------- */
+
+.remotes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.remote {
+  border-top: 1px solid var(--line);
+  padding: 16px 0;
+}
+
+.remote:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.remote__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.remote__name {
+  font-weight: 500;
+}
+
+.remote__provider {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+
+.remote__status {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.remote__options {
+  margin: 10px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 4px 18px;
+  font-size: 12.5px;
+}
+
+.remote__options div {
+  display: flex;
+  gap: 6px;
+}
+
+.remote__options dt {
+  color: var(--ink-soft);
+}
+
+.remote__options dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.remote__options .muted {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.dot--unknown {
+  background: var(--ink-soft);
+}
+
+.dot--error {
+  background: var(--ko);
 }

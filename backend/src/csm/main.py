@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from csm import __version__
-from csm.api import health
+from csm.api import health, remotes
 from csm.config import Settings, get_settings
 from csm.db import create_db_engine, create_session_factory, sqlite_url
 from csm.db.migrate import upgrade_to_head
@@ -68,6 +68,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(SecurityHeadersMiddleware)
     app.include_router(health.router, prefix="/api")
+    app.include_router(remotes.router, prefix="/api")
 
     if settings.web_dir.is_dir():
         # html=True sert index.html à la racine. Le repli SPA sur les routes

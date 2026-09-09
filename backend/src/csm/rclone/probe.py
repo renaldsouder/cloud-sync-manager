@@ -57,6 +57,9 @@ def rclone_version(
             [executable, "rc", "--loopback", "core/version"],
             capture_output=True,
             text=True,
+            # rclone émet de l'UTF-8 quelle que soit la locale de l'hôte.
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
             shell=False,

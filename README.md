@@ -6,8 +6,9 @@ ligne de commande.
 
 Moteur [rclone](https://rclone.org). Un seul conteneur, une seule WebUI.
 
-> **État : J1 — fondations.** L'API, la base de configuration et le conteneur
-> sont en place. Les stockages Cloud (J2) et les tâches (J3) suivent.
+> **État : J2 — stockages Cloud.** Création, test, modification et suppression
+> d'un stockage distant depuis la WebUI. Les tâches de synchronisation (J3)
+> suivent.
 
 - Cahier des charges : [`docs/Cloud_Sync_Manager_Cahier_des_charges.md`](docs/Cloud_Sync_Manager_Cahier_des_charges.md)
 - Décisions techniques : [`docs/Propositions_Techniques_Unraid.md`](docs/Propositions_Techniques_Unraid.md)
@@ -25,6 +26,10 @@ docs/       Cahier des charges et décisions
 ## Développement
 
 ### Backend
+
+Les tests d'intégration ont besoin du binaire rclone. Déposez-le dans
+`backend/.tools/` (ignoré par git) ou renseignez `CSM_RCLONE_BINARY` ; à défaut,
+ces tests sont ignorés plutôt qu'en échec.
 
 ```bash
 cd backend

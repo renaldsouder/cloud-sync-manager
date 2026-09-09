@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     #: copie locale (``backend/.tools/rclone.exe``).
     rclone_binary: str | None = None
 
+    #: Phrase de passe du ``rclone.conf`` chiffré (P8). Vide ⇒ configuration
+    #: non chiffrée, protégée par les seules permissions du fichier (0600),
+    #: ce qui est le comportement par défaut décrit au §6.1.
+    rclone_config_password: str | None = None
+
     log_level: str = "INFO"
 
     @property
