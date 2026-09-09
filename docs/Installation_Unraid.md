@@ -152,13 +152,26 @@ Deux canaux, tous deux optionnels, dans **Paramètres**.
   besoin se réduit à écrire un message ; un rôle `admin` donnerait en prime
   l'accès à votre baie, vos disques, vos VM, votre Docker et votre réseau.
 
+  Le plus simple : **Settings → Management Access → API Keys → Create from
+  Template**, et collez cette chaîne, qui pré-remplit le formulaire avec la
+  seule permission nécessaire.
+
+  ```
+  ?name=Cloud%20Sync%20Manager&description=Notifications%20de%20synchronisation&scopes=notifications:create
+  ```
+
+  Si cette forme est refusée, essayez `scopes=NOTIFICATIONS:CREATE_ANY` :
+  l'interface accepte l'action courte, la ligne de commande la forme longue.
+
+  En ligne de commande, l'équivalent est :
+
   ```
   unraid-api apikey --create --name "Cloud Sync Manager" --permissions "NOTIFICATIONS:CREATE_ANY"
   ```
 
-  Depuis l'interface : **Settings → Management Access → API Keys**, en
-  choisissant les permissions personnalisées plutôt qu'un rôle, puis
-  `NOTIFICATIONS` seul. L'API est intégrée à Unraid depuis la 7.2.
+  Sans modèle, créez la clé à la main en choisissant les permissions
+  personnalisées plutôt qu'un rôle, puis `NOTIFICATIONS` seul. L'API est
+  intégrée à Unraid depuis la 7.2.
 
   Si le test échoue avec cette seule permission, ajoutez `READ_ANY` avant
   d'élargir davantage : la mutation utilisée déduplique les notifications et
