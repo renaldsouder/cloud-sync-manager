@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>Cloud-Sync-Manager</Name>
-  <Repository>ghcr.io/VOTRE-COMPTE/cloud-sync-manager:latest</Repository>
-  <Registry>https://github.com/VOTRE-COMPTE/cloud-sync-manager/pkgs/container/cloud-sync-manager</Registry>
-  <Project>https://github.com/VOTRE-COMPTE/cloud-sync-manager</Project>
+  <Repository>ghcr.io/renaldsouder/cloud-sync-manager:latest</Repository>
+  <Registry>https://github.com/renaldsouder/cloud-sync-manager/pkgs/container/cloud-sync-manager</Registry>
+  <Project>https://github.com/renaldsouder/cloud-sync-manager</Project>
   <Support>https://forums.unraid.net/topic/XXXXXX-support-cloud-sync-manager/</Support>
-  <TemplateURL>https://raw.githubusercontent.com/VOTRE-COMPTE/unraid-templates/main/cloud-sync-manager.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/VOTRE-COMPTE/unraid-templates/main/images/cloud-sync-manager.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/renaldsouder/unraid-templates/main/cloud-sync-manager.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/renaldsouder/unraid-templates/main/images/cloud-sync-manager.png</Icon>
 
   <Network>bridge</Network>
   <Shell>sh</Shell>

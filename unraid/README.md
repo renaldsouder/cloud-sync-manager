@@ -17,7 +17,7 @@ unraid/
 
 ## Avant de soumettre
 
-Quatre valeurs restent à renseigner. Elles sont marquées `VOTRE-COMPTE` ou
+Quatre valeurs restent à renseigner. Elles sont marquées `renaldsouder` ou
 `XXXXXX` dans les deux fichiers XML.
 
 | Valeur | Où | Comment l'obtenir |
