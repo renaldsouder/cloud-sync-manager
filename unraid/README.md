@@ -27,6 +27,10 @@ Quatre valeurs restent à renseigner. Elles sont marquées `VOTRE-COMPTE` ou
 | Fil de support | `Support`, `ca_profile.xml` | À créer sur les forums Unraid, **après** avoir une image publiable |
 | Image publiée | `Repository` | Poussée sur GHCR par la CI, en `ghcr.io/<compte>/cloud-sync-manager` |
 
+La CI (`.github/workflows/ci.yml`) n'a **pas** besoin du pseudonyme : GitHub
+le fournit à l'exécution via `github.repository_owner`. Seuls les deux XML,
+statiques et lus par Community Applications, le portent en dur.
+
 L'ordre importe : l'image doit exister et être installable avant d'ouvrir le
 fil de support, et le fil doit exister avant la soumission — le portail
 vérifie que l'URL répond.
