@@ -204,6 +204,7 @@ class NotificationsIn(BaseModel):
     unraid_api_key: str | None = None
     webhook_url: str | None = None
     events: list[str] | None = None
+    allow_self_signed: bool | None = None
 
 
 @router.get("/settings")
@@ -222,6 +223,7 @@ def write_settings(
             unraid_api_key=payload.unraid_api_key,
             webhook_url=payload.webhook_url,
             events=payload.events,
+            allow_self_signed=payload.allow_self_signed,
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
@@ -237,18 +239,23 @@ def test_notifications(session: Session = Depends(get_session)) -> dict[str, Any
             status.HTTP_409_CONFLICT,
             "aucun canal de notification n'est configuré",
         )
-    delivered = Notifier(config).notify(
+    results = Notifier(config).notify(
         "failure",
         "Test depuis Cloud Sync Manager",
         "Ceci est une notification de test. Aucune tâche n'est concernée.",
     )
+    delivered = any(result.ok for result in results)
+    # §27.10 — la cause remonte jusqu'à l'utilisateur. Le faire
+    # descendre dans les journaux du conteneur reviendrait à lui
+    # demander d'ouvrir un terminal pour un diagnostic courant.
     return {
         "delivered": delivered,
-        "detail": (
-            "Notification envoyée."
-            if delivered
-            else "Aucun canal n'a accepté la notification — voyez les journaux."
-        ),
+        "detail": " · ".join(result.label for result in results)
+        or "aucun canal configuré",
+        "results": [
+            {"channel": r.channel, "ok": r.ok, "detail": r.detail}
+            for r in results
+        ],
     }
 
 

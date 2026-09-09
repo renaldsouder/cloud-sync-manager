@@ -26,7 +26,7 @@ SFTP_SECRET = "MotDePasseSFTP!42"
 
 
 def test_nothing_is_sent_without_configuration() -> None:
-    assert Notifier(NotificationConfig()).notify("failure", "sujet", "détail") is False
+    assert Notifier(NotificationConfig()).notify("failure", "sujet", "détail") == []
 
 
 def test_only_the_selected_events_are_sent() -> None:
@@ -38,7 +38,78 @@ def test_only_the_selected_events_are_sent() -> None:
 def test_an_unreachable_channel_never_raises() -> None:
     """Une synchronisation ne doit jamais échouer parce qu'un webhook est tombé."""
     config = NotificationConfig(webhook_url="http://127.0.0.1:9/hook")
-    assert Notifier(config).notify("failure", "sujet", "détail") is False
+    results = Notifier(config).notify("failure", "sujet", "détail")
+    assert [result.ok for result in results] == [False]
+    assert results[0].detail, "l'échec doit porter une cause exploitable"
+
+
+def test_a_self_signed_certificate_is_explained_not_just_refused() -> None:
+    """§27.10 — l'utilisateur ne doit pas fouiller les journaux du conteneur.
+
+    Un serveur Unraid en HTTPS présente par défaut un certificat auto-signé :
+    c'est le cas le plus courant, il mérite un message qui dit quoi faire.
+    """
+    from ssl import SSLCertVerificationError
+
+    from csm.services.notifications import _transport_error
+
+    detail = _transport_error(
+        SSLCertVerificationError(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+            "self-signed certificate (_ssl.c:1032)"
+        )
+    )
+    assert "auto-signé" in detail
+    assert "http://" in detail
+
+
+def test_transport_errors_are_translated() -> None:
+    from csm.services.notifications import _transport_error
+
+    assert "refusée" in _transport_error(OSError("Connection refused"))
+    assert "introuvable" in _transport_error(OSError("Name or service not known"))
+    assert "injoignable" in _transport_error(OSError("operation timed out"))
+
+
+def test_permission_errors_name_the_missing_scope() -> None:
+    import urllib.error
+
+    from csm.services.notifications import _http_error
+
+    detail = _http_error(
+        urllib.error.HTTPError("http://x/graphql", 403, "Forbidden", {}, None)
+    )
+    assert "NOTIFICATIONS:CREATE_ANY" in detail
+
+
+def test_graphql_errors_keep_the_server_message() -> None:
+    from csm.services.notifications import _graphql_error
+
+    detail = _graphql_error(
+        '{"errors":[{"message":"Cannot query field notifyIfUnique"}]}'
+    )
+    assert detail == "Cannot query field notifyIfUnique"
+
+
+def test_self_signed_option_round_trips(client: TestClient) -> None:
+    saved = client.put("/api/settings", json={"allow_self_signed": True})
+    assert saved.status_code == 200
+    assert client.get("/api/settings").json()["notifications"]["allow_self_signed"] is True
+
+    client.put("/api/settings", json={"allow_self_signed": False})
+    assert (
+        client.get("/api/settings").json()["notifications"]["allow_self_signed"] is False
+    )
+
+
+def test_the_test_endpoint_returns_the_cause(client: TestClient) -> None:
+    client.put("/api/settings", json={"webhook_url": "http://127.0.0.1:9/hook"})
+    payload = client.post("/api/settings/notifications/test").json()
+
+    assert payload["delivered"] is False
+    assert payload["detail"], "le motif doit remonter jusqu'à l'interface"
+    assert payload["results"][0]["channel"] == "Webhook"
+    assert payload["results"][0]["ok"] is False
 
 
 def test_event_mapping() -> None:

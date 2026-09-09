@@ -173,6 +173,13 @@ Deux canaux, tous deux optionnels, dans **Paramètres**.
   personnalisées plutôt qu'un rôle, puis `NOTIFICATIONS` seul. L'API est
   intégrée à Unraid depuis la 7.2.
 
+  **Si votre serveur est en `https://`**, cochez « accepter un certificat
+  auto-signé » : Unraid présente par défaut un certificat que rien ne peut
+  valider, et la connexion serait refusée avant même d'être tentée. Le
+  trafic reste chiffré ; c'est l'identité du serveur qui n'est plus
+  vérifiée, ce qui est sans conséquence vers votre propre machine sur votre
+  propre réseau. Une adresse en `http://` évite la question.
+
   Si le test échoue avec cette seule permission, ajoutez `READ_ANY` avant
   d'élargir davantage : la mutation utilisée déduplique les notifications et
   a peut-être besoin de relire les existantes.
@@ -212,7 +219,8 @@ Avant toute mise à jour majeure, sauvegardez aussi le dossier appdata.
 | « la source ne contient aucun fichier… » | Share démonté ou chemin disparu | Vérifiez le montage avant de relancer |
 | Fichiers inaccessibles depuis SMB | `PUID`/`PGID`/`UMASK` | Remettez `99` / `100` / `000` |
 | Authentification expirée | Jeton OAuth révoqué | Rejouez `rclone authorize` et recollez le jeton |
-| Notification de test refusée | Permissions de la clé d'API | Ajoutez `NOTIFICATIONS:READ_ANY` ; la réponse brute du serveur est dans le journal du conteneur |
+| « certificat non vérifiable » | Unraid en HTTPS avec certificat auto-signé | Cochez « accepter un certificat auto-signé », ou passez l'adresse en `http://` |
+| « clé d'API refusée » | Permissions insuffisantes | Ajoutez `NOTIFICATIONS:READ_ANY` à la clé |
 | Heures de planification décalées | `TZ` absent | Renseignez votre fuseau |
 
 Chaque exécution conserve son résultat, son code de retour, la version de

@@ -58,6 +58,7 @@ export default function SettingsView() {
         unraid_url: settings.unraid_url,
         webhook_url: settings.webhook_url,
         events: settings.events,
+        allow_self_signed: settings.allow_self_signed,
         // Champ laissé vide : la clé déjà enregistrée est conservée.
         ...(apiKey ? { unraid_api_key: apiKey } : {}),
       });
@@ -150,6 +151,20 @@ export default function SettingsView() {
               </span>
             </label>
 
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={settings.allow_self_signed}
+                onChange={(event) =>
+                  setSettings({ ...settings, allow_self_signed: event.target.checked })
+                }
+              />
+              Accepter un certificat auto-signé. Nécessaire pour joindre un serveur
+              Unraid en <code>https://</code>, qui en présente un par défaut. La
+              connexion reste chiffrée ; c'est l'identité du serveur qui n'est plus
+              vérifiée — sans risque vers votre propre machine sur votre réseau.
+            </label>
+
             <fieldset className="choices">
               <legend className="field__label">Événements notifiés</legend>
               {events.map((event) => (
@@ -181,7 +196,9 @@ export default function SettingsView() {
                 onClick={() =>
                   void run(async () => {
                     const result = await testNotifications();
-                    setMessage(result.detail);
+                    // §27.10 : le motif exact plutôt qu'un « échec » muet.
+                    if (result.delivered) setMessage(result.detail);
+                    else setError(result.detail);
                   })
                 }
               >

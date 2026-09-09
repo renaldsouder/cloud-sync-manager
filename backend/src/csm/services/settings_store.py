@@ -19,6 +19,7 @@ UNRAID_URL = "notifications.unraid_url"
 UNRAID_API_KEY = "notifications.unraid_api_key"
 WEBHOOK_URL = "notifications.webhook_url"
 NOTIFY_EVENTS = "notifications.events"
+ALLOW_SELF_SIGNED = "notifications.allow_self_signed"
 
 #: Clés dont la valeur ne doit jamais ressortir de l'application (§6.1).
 SECRET_KEYS = frozenset({UNRAID_API_KEY})
@@ -49,6 +50,7 @@ def public_settings(session: Session) -> dict[str, object]:
         "unraid_api_key_configured": bool(stored.get(UNRAID_API_KEY)),
         "webhook_url": stored.get(WEBHOOK_URL) or "",
         "events": _events(stored.get(NOTIFY_EVENTS)),
+        "allow_self_signed": stored.get(ALLOW_SELF_SIGNED) == "1",
     }
 
 
@@ -59,6 +61,7 @@ def notification_config(session: Session) -> NotificationConfig:
         unraid_api_key=stored.get(UNRAID_API_KEY) or None,
         webhook_url=stored.get(WEBHOOK_URL) or None,
         events=tuple(_events(stored.get(NOTIFY_EVENTS))),
+        allow_self_signed=stored.get(ALLOW_SELF_SIGNED) == "1",
     )
 
 
@@ -69,6 +72,7 @@ def update_notifications(
     unraid_api_key: str | None = None,
     webhook_url: str | None = None,
     events: list[str] | None = None,
+    allow_self_signed: bool | None = None,
 ) -> None:
     if unraid_url is not None:
         put(session, UNRAID_URL, unraid_url.strip() or None)
@@ -78,6 +82,9 @@ def update_notifications(
         # Chaîne vide = effacement explicite ; absence = on ne touche pas,
         # ce qui permet d'enregistrer le formulaire sans retaper la clé.
         put(session, UNRAID_API_KEY, unraid_api_key.strip() or None)
+    if allow_self_signed is not None:
+        put(session, ALLOW_SELF_SIGNED, "1" if allow_self_signed else "0")
+
     if events is not None:
         unknown = [event for event in events if event not in EVENTS]
         if unknown:

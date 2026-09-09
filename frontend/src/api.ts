@@ -297,6 +297,7 @@ export type NotificationSettings = {
   unraid_api_key_configured: boolean;
   webhook_url: string;
   events: string[];
+  allow_self_signed: boolean;
 };
 
 export const fetchFilterSets = (signal?: AbortSignal) =>
@@ -330,6 +331,7 @@ export const saveSettings = (body: {
   unraid_api_key?: string;
   webhook_url?: string;
   events?: string[];
+  allow_self_signed?: boolean;
 }) =>
   request<{ notifications: NotificationSettings }>("/api/settings", {
     method: "PUT",
@@ -337,9 +339,11 @@ export const saveSettings = (body: {
   });
 
 export const testNotifications = () =>
-  request<{ delivered: boolean; detail: string }>("/api/settings/notifications/test", {
-    method: "POST",
-  });
+  request<{
+    delivered: boolean;
+    detail: string;
+    results: { channel: string; ok: boolean; detail: string }[];
+  }>("/api/settings/notifications/test", { method: "POST" });
 
 export const exportConfig = () => request<Record<string, unknown>>("/api/config/export");
 
