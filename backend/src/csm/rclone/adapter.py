@@ -57,11 +57,27 @@ class RcloneAdapter:
     # -- exécution ----------------------------------------------------------
 
     def _environment(self) -> dict[str, str]:
-        environment = dict(os.environ)
+        """Environnement remis à plat avant chaque appel.
+
+        rclone interprète **toute** variable ``RCLONE_*`` comme une option :
+        ``RCLONE_MAX_DELETE``, ``RCLONE_DELETE_EXCLUDED``, ``RCLONE_FILTER``…
+        En laissant passer l'environnement du conteneur, une variable posée
+        par l'administrateur — ou une faute de frappe dans le template
+        Unraid — modifierait silencieusement une opération destructive, et
+        notre ligne de commande cesserait d'être la vérité entière. Le §18
+        veut l'inverse : ce qui est demandé à rclone est ce que nous avons
+        écrit, et rien d'autre.
+
+        On repart donc de l'environnement débarrassé de tout ``RCLONE_*``,
+        puis on ne remet que les deux réglages dont nous avons besoin.
+        """
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("RCLONE_")
+        }
         if self.config_password:
             environment["RCLONE_CONFIG_PASS"] = self.config_password
-        else:
-            environment.pop("RCLONE_CONFIG_PASS", None)
         # Empêche rclone de demander quoi que ce soit : dans un conteneur,
         # une invite bloquerait indéfiniment.
         environment["RCLONE_ASK_PASSWORD"] = "false"

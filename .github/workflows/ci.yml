@@ -11,7 +11,10 @@ on:
 # l'exécution. Seul le template XML, statique et lu par Community
 # Applications, doit le porter en dur.
 env:
-  RCLONE_VERSION: "1.75.1"
+  # Surtout pas de préfixe RCLONE_ : rclone interprète toute variable
+  # ainsi nommée comme une option. RCLONE_VERSION était lu comme le
+  # drapeau booléen --version, et faisait échouer la moindre commande.
+  CSM_RCLONE_VERSION: "1.75.1"
 
 jobs:
   backend:
@@ -24,19 +27,18 @@ jobs:
         with:
           python-version: "3.13"
 
-      # Version épinglée et somme de contrôle vérifiée : les tests
-      # d'intégration dépendent du comportement réel de rclone, pas d'une
-      # version quelconque de la distribution.
-      - name: Installer rclone ${{ env.RCLONE_VERSION }}
+      # Le binaire vient de l'image officielle, celle-là même que notre
+      # Dockerfile copie : les tests s'exécutent donc contre *exactement* le
+      # rclone que l'application embarquera. Docker vérifie l'empreinte de
+      # l'image, ce qui remplace le téléchargement, la somme de contrôle et
+      # la décompression — trois occasions de casser en moins.
+      - name: Installer rclone ${{ env.CSM_RCLONE_VERSION }}
         run: |
-          set -euo pipefail
-          base="https://downloads.rclone.org/v${RCLONE_VERSION}"
-          archive="rclone-v${RCLONE_VERSION}-linux-amd64.zip"
-          curl -fsSLO "${base}/${archive}"
-          curl -fsSL "${base}/SHA256SUMS" -o SHA256SUMS
-          grep " ${archive}\$" SHA256SUMS | sha256sum --check --strict
-          unzip -q "${archive}"
-          sudo install -m 755 "rclone-v${RCLONE_VERSION}-linux-amd64/rclone" /usr/local/bin/rclone
+          set -eo pipefail
+          docker create --name rclone-src "rclone/rclone:${CSM_RCLONE_VERSION}"
+          docker cp rclone-src:/usr/local/bin/rclone /tmp/rclone
+          docker rm rclone-src
+          sudo install -m 755 /tmp/rclone /usr/local/bin/rclone
           rclone version
 
       - name: Installer les dépendances

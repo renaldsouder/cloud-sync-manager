@@ -129,3 +129,37 @@ def test_unicode_and_spaces_in_paths(adapter: RcloneAdapter, tmp_path: Path) -> 
 
     names = {entry["Name"] for entry in adapter.lsjson("unicode:")}
     assert names == {"dossier accentué éàü", "fichier avec espaces.txt"}
+
+
+def test_the_environment_cannot_alter_the_command(
+    adapter: RcloneAdapter, monkeypatch
+) -> None:
+    """§18 — la ligne de commande doit être la vérité entière.
+
+    rclone lit toute variable ``RCLONE_*`` comme une option. Sans nettoyage,
+    une variable posée dans le template Unraid modifierait silencieusement
+    une opération destructive : ``RCLONE_DELETE_EXCLUDED`` supprimerait à
+    destination des fichiers que nos filtres viennent d'écarter.
+    """
+    monkeypatch.setenv("RCLONE_DELETE_EXCLUDED", "true")
+    monkeypatch.setenv("RCLONE_MAX_DELETE", "99999")
+
+    environment = adapter._environment()
+
+    assert "RCLONE_DELETE_EXCLUDED" not in environment
+    assert "RCLONE_MAX_DELETE" not in environment
+    # Les deux seuls réglages que nous posons nous-mêmes survivent.
+    assert environment["RCLONE_ASK_PASSWORD"] == "false"
+    assert "PATH" in environment, "le reste de l'environnement doit être conservé"
+
+
+def test_a_stray_rclone_variable_no_longer_breaks_everything(
+    adapter: RcloneAdapter, monkeypatch
+) -> None:
+    """Le cas réel : RCLONE_VERSION=1.75.1 posée par une chaîne de CI.
+
+    rclone la lisait comme le drapeau booléen ``--version`` et refusait de
+    démarrer, sur *toutes* les commandes.
+    """
+    monkeypatch.setenv("RCLONE_VERSION", "1.75.1")
+    assert adapter.version().version.startswith("v")
