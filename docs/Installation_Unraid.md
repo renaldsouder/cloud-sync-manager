@@ -153,7 +153,7 @@ Deux canaux, tous deux optionnels, dans **Paramètres**.
   l'accès à votre baie, vos disques, vos VM, votre Docker et votre réseau.
 
   ```
-  unraid-api apikey --create --name "Cloud Sync Manager"       --permissions "NOTIFICATIONS:CREATE_ANY"       --description "Alertes de synchronisation"
+  unraid-api apikey --create --name "Cloud Sync Manager" --permissions "NOTIFICATIONS:CREATE_ANY"
   ```
 
   Depuis l'interface : **Settings → Management Access → API Keys**, en
