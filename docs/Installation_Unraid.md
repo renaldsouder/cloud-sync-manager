@@ -145,9 +145,24 @@ exécution réelle.
 
 Deux canaux, tous deux optionnels, dans **Paramètres**.
 
-- **Unraid** : renseignez l'adresse de votre serveur et une clé d'API. La
-  clé se crée depuis les paramètres d'Unraid (API intégrée à partir de la
-  version 7.2). Elle n'est jamais réaffichée ni exportée.
+- **Unraid** : renseignez l'adresse de votre serveur et une clé d'API.
+  Elle n'est jamais réaffichée ni exportée.
+
+  **Créez une clé limitée aux notifications, pas une clé `admin`.** Notre
+  besoin se réduit à écrire un message ; un rôle `admin` donnerait en prime
+  l'accès à votre baie, vos disques, vos VM, votre Docker et votre réseau.
+
+  ```
+  unraid-api apikey --create --name "Cloud Sync Manager"       --permissions "NOTIFICATIONS:CREATE_ANY"       --description "Alertes de synchronisation"
+  ```
+
+  Depuis l'interface : **Settings → Management Access → API Keys**, en
+  choisissant les permissions personnalisées plutôt qu'un rôle, puis
+  `NOTIFICATIONS` seul. L'API est intégrée à Unraid depuis la 7.2.
+
+  Si le test échoue avec cette seule permission, ajoutez `READ_ANY` avant
+  d'élargir davantage : la mutation utilisée déduplique les notifications et
+  a peut-être besoin de relire les existantes.
 - **Webhook** : une URL qui recevra un POST JSON — Home Assistant, Discord,
   n'importe quoi d'autre.
 
@@ -184,6 +199,7 @@ Avant toute mise à jour majeure, sauvegardez aussi le dossier appdata.
 | « la source ne contient aucun fichier… » | Share démonté ou chemin disparu | Vérifiez le montage avant de relancer |
 | Fichiers inaccessibles depuis SMB | `PUID`/`PGID`/`UMASK` | Remettez `99` / `100` / `000` |
 | Authentification expirée | Jeton OAuth révoqué | Rejouez `rclone authorize` et recollez le jeton |
+| Notification de test refusée | Permissions de la clé d'API | Ajoutez `NOTIFICATIONS:READ_ANY` ; la réponse brute du serveur est dans le journal du conteneur |
 | Heures de planification décalées | `TZ` absent | Renseignez votre fuseau |
 
 Chaque exécution conserve son résultat, son code de retour, la version de
