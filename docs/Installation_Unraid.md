@@ -55,6 +55,12 @@ conduit depuis l'interface, sans installer quoi que ce soit :
 Le jeton est rempli automatiquement. Pour OneDrive, `drive_id` et `drive_type`
 le sont aussi — l'application les demande à Microsoft pour vous.
 
+Si Microsoft ne livre pas l'identifiant du disque, le stockage est tout de même
+créé avec son jeton, et la liste affiche un bouton **Compléter la
+configuration** : il réinterroge Microsoft sans qu'il faille recommencer
+l'autorisation. En cas d'échec répété, le message donne la réponse exacte du
+serveur.
+
 Le jeton est écrit directement dans le `rclone.conf` du conteneur. Il n'est
 jamais réaffiché ensuite, ni inclus dans une sauvegarde de configuration.
 

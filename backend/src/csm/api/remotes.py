@@ -139,6 +139,22 @@ def delete_remote(
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
+@router.post("/remotes/{remote_id}/complete")
+def complete_remote(
+    remote_id: str,
+    session: Session = Depends(get_session),
+    adapter: RcloneAdapter = Depends(get_adapter),
+    store: RcloneConfigStore = Depends(get_store),
+) -> dict:
+    """Complète une configuration OneDrive à laquelle il manque le disque."""
+    remote = _get_remote(session, remote_id)
+    try:
+        found = service.complete_onedrive(session, adapter, store, remote)
+    except service.RemoteError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return {"options": found}
+
+
 @router.post("/remotes/{remote_id}/test", response_model=RemoteTestOut)
 def test_remote(
     remote_id: str,

@@ -98,6 +98,11 @@ export const createRemote = (body: {
   options: Record<string, string>;
 }) => request<Remote>("/api/remotes", { method: "POST", body: JSON.stringify(body) });
 
+export const completeRemote = (id: string) =>
+  request<{ options: Record<string, string> }>(`/api/remotes/${id}/complete`, {
+    method: "POST",
+  });
+
 export const testRemote = (id: string) =>
   request<RemoteTest>(`/api/remotes/${id}/test`, { method: "POST" });
 
@@ -392,7 +397,7 @@ export const startOAuth = (provider: string) =>
   );
 
 export const completeOAuth = (sessionId: string, redirectUrl: string) =>
-  request<{ options: Record<string, string>; warning?: string }>(
+  request<{ options: Record<string, string>; error?: string }>(
     "/api/oauth/complete",
     {
       method: "POST",

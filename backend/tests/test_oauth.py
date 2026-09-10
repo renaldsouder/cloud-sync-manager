@@ -130,3 +130,59 @@ def test_completing_without_a_session_is_refused(client: TestClient) -> None:
         json={"session_id": "inexistante", "redirect_url": "http://x/?code=1"},
     )
     assert response.status_code == 409
+
+
+# -- identification du disque OneDrive ----------------------------------------
+
+
+def test_the_access_token_is_extracted_from_the_blob() -> None:
+    from csm.services.oauth import access_token_of
+
+    assert access_token_of('{"access_token": "abc", "expiry": "2026"}') == "abc"
+
+
+@pytest.mark.parametrize(
+    "blob", ["", "pas du json", "{}", '{"refresh_token": "seulement"}', "[1, 2]"]
+)
+def test_a_blob_without_token_is_refused(blob: str) -> None:
+    from csm.services.oauth import access_token_of
+
+    with pytest.raises(OAuthError):
+        access_token_of(blob)
+
+
+def test_a_refused_token_names_the_cause() -> None:
+    """§27.10 — « disque introuvable » n'aide personne ; le motif si."""
+    from csm.services.oauth import describe_drive
+
+    with pytest.raises(OAuthError) as excinfo:
+        describe_drive("jeton-invalide")
+
+    message = str(excinfo.value)
+    assert "401" in message or "jeton" in message.lower()
+    # Les deux points d'entrée sont tentés avant d'abandonner.
+    assert "drive" in message and "drives" in message
+
+
+def test_completing_a_remote_that_is_not_onedrive_is_refused(
+    client: TestClient, tmp_path
+) -> None:
+    from tests.test_tasks_api import make_cloud
+
+    remote_id = make_cloud(client, tmp_path / "cloud")
+    refused = client.post(f"/api/remotes/{remote_id}/complete")
+    assert refused.status_code == 409
+    assert "OneDrive" in refused.json()["detail"]
+
+
+def test_completing_a_onedrive_without_token_is_refused(client: TestClient) -> None:
+    """Le message doit dire quoi faire, pas seulement que ça a échoué."""
+    created = client.post(
+        "/api/remotes",
+        json={"name": "OD sans jeton", "provider": "onedrive", "options": {}},
+    )
+    assert created.status_code == 201, created.text
+
+    refused = client.post(f"/api/remotes/{created.json()['id']}/complete")
+    assert refused.status_code == 409
+    assert "relancez l'autorisation" in refused.json()["detail"]

@@ -20,14 +20,13 @@ export default function OAuthPanel({ provider, label, onAuthorized }: Props) {
   const [session, setSession] = useState<string | null>(null);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [redirect, setRedirect] = useState("");
-  const [warning, setWarning] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function begin() {
     setBusy(true);
     setError(null);
-    setWarning(null);
     try {
       const started = await startOAuth(provider);
       setSession(started.session_id);
@@ -46,7 +45,9 @@ export default function OAuthPanel({ provider, label, onAuthorized }: Props) {
     setError(null);
     try {
       const done = await completeOAuth(session, redirect.trim());
-      setWarning(done.warning ?? null);
+      // Une autorisation aboutie mais incomplète doit se voir : le stockage
+      // serait créé et inutilisable.
+      setError(done.error ?? null);
       setSession(null);
       setAuthUrl(null);
       setRedirect("");
@@ -114,7 +115,6 @@ export default function OAuthPanel({ provider, label, onAuthorized }: Props) {
         </>
       )}
 
-      {warning && <p className="state state--error">{warning}</p>}
       {error && <p className="state state--error">{error}</p>}
     </div>
   );

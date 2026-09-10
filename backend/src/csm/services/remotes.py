@@ -208,6 +208,45 @@ def test_remote(
     }
 
 
+def complete_onedrive(
+    session: Session,
+    adapter: RcloneAdapter,
+    store: RcloneConfigStore,
+    remote: Remote,
+) -> dict[str, str]:
+    """Renseigne ``drive_id`` et ``drive_type`` d'un OneDrive incomplet.
+
+    L'autorisation peut aboutir sans que Microsoft ait livré l'identifiant
+    du disque. Le jeton est alors valide mais le stockage inutilisable :
+    plutôt que d'imposer de tout recommencer, on réinterroge Graph avec le
+    jeton déjà enregistré.
+    """
+    from csm.services import oauth
+
+    if remote.provider != "onedrive":
+        raise RemoteError("cette réparation ne concerne que OneDrive")
+    if not store.has_section(remote.rclone_remote_name):
+        raise RemoteError("configuration introuvable pour ce stockage")
+
+    section = dict(store.read()[remote.rclone_remote_name])
+    blob = section.get("token", "")
+    if not blob:
+        raise RemoteError(
+            "aucun jeton enregistré : relancez l'autorisation depuis l'assistant"
+        )
+
+    try:
+        found = oauth.describe_drive(oauth.access_token_of(blob))
+    except oauth.OAuthError as exc:
+        raise RemoteError(str(exc)) from exc
+
+    section.update(found)
+    store.upsert_section(remote.rclone_remote_name, section)
+    remote.status = "unknown"
+    session.flush()
+    return found
+
+
 def describe_options(
     adapter: RcloneAdapter, store: RcloneConfigStore, remote: Remote
 ) -> dict[str, str]:

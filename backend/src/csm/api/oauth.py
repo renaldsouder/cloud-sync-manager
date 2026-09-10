@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -13,6 +13,8 @@ from csm.api.deps import get_adapter
 from csm.rclone.adapter import RcloneAdapter
 from csm.services import oauth
 from csm.services.oauth import AUTHORIZE_PORT, OAuthBroker, OAuthError
+
+logger = logging.getLogger("csm.oauth")
 
 router = APIRouter(tags=["autorisation"])
 
@@ -78,15 +80,18 @@ def complete(
     # de renvoyer l'utilisateur au terminal pour les chercher.
     if payload.session_id.endswith("-onedrive"):
         try:
-            access_token = json.loads(token).get("access_token", "")
-            options.update(oauth.describe_drive(access_token))
-        except (ValueError, OAuthError) as exc:
+            options.update(oauth.describe_drive(oauth.access_token_of(token)))
+        except OAuthError as exc:
+            logger.warning("disque OneDrive non identifié : %s", exc)
+            # Le stockage reste créable — le jeton est bon — mais il sera
+            # inutilisable tant que le disque n'est pas renseigné. On le dit
+            # franchement plutôt que d'un avertissement qu'on peut manquer.
             return {
                 "options": options,
-                "warning": (
-                    "Jeton obtenu, mais le disque OneDrive n'a pas pu être "
-                    f"identifié ({exc}). Renseignez drive_id et drive_type "
-                    "à la main si le test échoue."
+                "error": (
+                    f"Jeton obtenu, mais {exc}. Créez tout de même le "
+                    "stockage : un bouton « Compléter la configuration » "
+                    "permettra de réessayer."
                 ),
             }
 

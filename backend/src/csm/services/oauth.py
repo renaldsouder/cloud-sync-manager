@@ -249,27 +249,89 @@ def provider_redirect(state: str, timeout: float = 15.0) -> str:
         ) from exc
 
 
+GRAPH_ENDPOINTS = (
+    "https://graph.microsoft.com/v1.0/me/drive",
+    # Le dialogue de rclone interroge la forme plurielle ; certains comptes
+    # professionnels ne répondent qu'à celle-là.
+    "https://graph.microsoft.com/v1.0/me/drives",
+)
+
+
+def access_token_of(blob: str) -> str:
+    """Jeton d'accès contenu dans le bloc rendu par ``rclone authorize``."""
+    import json
+
+    try:
+        payload = json.loads(blob)
+    except ValueError as exc:
+        raise OAuthError(
+            "le bloc rendu par rclone n'est pas lisible comme du JSON"
+        ) from exc
+    token = str(payload.get("access_token", "")) if isinstance(payload, dict) else ""
+    if not token:
+        raise OAuthError("le bloc rendu par rclone ne contient pas d'access_token")
+    return token
+
+
 def describe_drive(access_token: str, timeout: float = 15.0) -> dict[str, str]:
     """Identifie le disque OneDrive associé à un jeton.
 
     OneDrive exige ``drive_id`` et ``drive_type`` en plus du jeton, valeurs
     que le dialogue interactif de rclone découvre en interrogeant Microsoft.
     On fait la même chose, pour éviter de renvoyer l'utilisateur au terminal.
+
+    Deux points d'entrée sont tentés : le disque par défaut, puis la liste.
+    Les comptes professionnels et les comptes personnels ne répondent pas
+    toujours au même.
     """
-    request = urllib.request.Request(
-        "https://graph.microsoft.com/v1.0/me/drive",
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
+    import json
+
+    causes: list[str] = []
+    for endpoint in GRAPH_ENDPOINTS:
+        request = urllib.request.Request(
+            endpoint, headers={"Authorization": f"Bearer {access_token}"}
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                payload = json.load(response)
+        except urllib.error.HTTPError as exc:
+            detail = _graph_error(exc)
+            causes.append(f"{endpoint.rsplit('/', 1)[-1]} : {detail}")
+            continue
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            causes.append(f"{endpoint.rsplit('/', 1)[-1]} : {exc}")
+            continue
+
+        drive = payload
+        if isinstance(payload, dict) and "value" in payload:
+            entries = payload.get("value") or []
+            if not entries:
+                causes.append("aucun disque associé à ce compte")
+                continue
+            drive = entries[0]
+
+        drive_id = str(drive.get("id", "")) if isinstance(drive, dict) else ""
+        if drive_id:
+            drive_type = str(drive.get("driveType", "")) or "personal"
+            return {"drive_id": drive_id, "drive_type": drive_type}
+        causes.append("réponse sans identifiant de disque")
+
+    raise OAuthError("Microsoft n'a pas identifié le disque — " + " ; ".join(causes))
+
+
+def _graph_error(exc: urllib.error.HTTPError) -> str:
+    """Message d'erreur de Graph, plutôt qu'un simple code (§27.10)."""
+    import json
+
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            import json
-
-            payload = json.load(response)
-    except Exception as exc:  # pragma: no cover - dépend du réseau
-        raise OAuthError(f"disque OneDrive introuvable : {exc}") from exc
-
-    drive_id = str(payload.get("id", ""))
-    drive_type = str(payload.get("driveType", ""))
-    if not drive_id:
-        raise OAuthError("Microsoft n'a pas renvoyé d'identifiant de disque")
-    return {"drive_id": drive_id, "drive_type": drive_type or "personal"}
+        payload = json.loads(exc.read(4096).decode("utf-8", "replace"))
+        message = payload.get("error", {}).get("message")
+        if message:
+            return f"HTTP {exc.code} — {message}"
+    except Exception:  # pragma: no cover - corps absent ou illisible
+        pass
+    if exc.code == 401:
+        return "HTTP 401 — jeton refusé"
+    if exc.code == 403:
+        return "HTTP 403 — autorisation insuffisante sur les fichiers"
+    return f"HTTP {exc.code}"

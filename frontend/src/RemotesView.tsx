@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import RemoteWizard from "./RemoteWizard";
 import {
+  completeRemote,
   deleteRemote,
   fetchRemotes,
   testRemote,
@@ -40,6 +41,19 @@ export default function RemotesView() {
     try {
       const result = await testRemote(remote.id);
       setResults((previous) => ({ ...previous, [remote.id]: result }));
+      await reload();
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function act(remote: Remote, action: () => Promise<unknown>) {
+    setBusyId(remote.id);
+    setError(null);
+    try {
+      await action();
       await reload();
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -122,7 +136,25 @@ export default function RemotesView() {
                 </p>
               )}
 
+              {remote.provider === "onedrive" && !remote.options.drive_id && (
+                <p className="state state--error">
+                  Ce stockage OneDrive n'a pas d'identifiant de disque : Microsoft
+                  ne l'a pas livré au moment de l'autorisation. Le jeton, lui, est
+                  enregistré — un nouvel essai suffit généralement.
+                </p>
+              )}
+
               <div className="actions">
+                {remote.provider === "onedrive" && !remote.options.drive_id && (
+                  <button
+                    type="button"
+                    className="btn btn--small"
+                    disabled={busyId === remote.id}
+                    onClick={() => void act(remote, () => completeRemote(remote.id))}
+                  >
+                    Compléter la configuration
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn--small"
