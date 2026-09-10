@@ -27,7 +27,7 @@ Un conteneur. Une interface Web. rclone en dessous.
 
 ## Maturité — à lire avant d'installer
 
-Version **0.2.3**. Elle est publiée, elle tourne, et les garde-fous décrits plus
+Version **0.2.4**. Elle est publiée, elle tourne, et les garde-fous décrits plus
 bas sont réels. C'est aussi un projet dont le premier commit date du 9 septembre
 2026, et dont le propre critère de réussite vient tout juste de commencer à
 courir.

@@ -26,7 +26,7 @@ One container. One web interface. rclone underneath.
 
 ## Maturity — read this before installing
 
-Version **0.2.3**. It is published, it runs, and the destructive guards below
+Version **0.2.4**. It is published, it runs, and the destructive guards below
 are real. It is also a project whose first commit is dated 9 September 2026,
 and whose own success criterion has barely started running.
 
