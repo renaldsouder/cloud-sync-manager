@@ -24,9 +24,34 @@ Cloud Sync: choose a provider, choose a folder, choose a direction, done.
 
 One container. One web interface. rclone underneath.
 
-> **Note on language** — the web interface is currently **French only**.
-> Everything else — configuration, documentation, code — is bilingual or
-> English. Interface translation is on the roadmap.
+## Maturity — read this before installing
+
+Version **0.2.3**. It is published, it runs, and the destructive guards below
+are real. It is also a project whose first commit is dated 9 September 2026,
+and whose own success criterion has barely started running.
+
+| | |
+|---|---|
+| Destructive guards (threshold, unreachable source, trash, dry run) | Automated **and** integration tests — but against a local folder standing in for the cloud |
+| Tested with a real account | **OneDrive only** |
+| Google Drive, Dropbox | OAuth path implemented, tested up to the consent screen, never completed with a real account |
+| S3, B2, WebDAV, SFTP | Implemented, **never exercised against a real service** |
+| Unraid notifications | Validated against a real Unraid 7.3.2 |
+| 30 days of real use — the project's own success criterion | Under way, started 9 September 2026 |
+| Bidirectional sync | Deliberately absent until its destructive test matrix is complete |
+| English web interface | Not done — **the interface is French only** |
+
+Two things follow from that table.
+
+**A local folder cannot reproduce what a cloud does badly** — unreliable
+listings, rate limits, eventual consistency. Those are precisely the conditions
+the fail-closed rules exist for, and they have not been met in the wild yet.
+
+**Real use finds what the test suite cannot.** Six defects have already surfaced
+that 243 passing tests did not catch: an OAuth port that could never have
+worked, accented filenames corrupted by locale decoding, runs displayed as
+running forever. Expect more. Start with **Copy**, on data you have a backup of
+— not with **Mirror** on your only copy.
 
 ## What makes it different
 
@@ -93,6 +118,9 @@ anyone on your network can trigger a deletion.
 ## Connecting a cloud provider
 
 Two kinds of providers, two experiences.
+
+See the maturity table above for which of these have actually been exercised
+against a real account.
 
 ### Key or password — S3, Backblaze B2, WebDAV, SFTP
 

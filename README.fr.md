@@ -25,6 +25,38 @@ fournisseur, un dossier, un sens, et c'est réglé.
 
 Un conteneur. Une interface Web. rclone en dessous.
 
+## Maturité — à lire avant d'installer
+
+Version **0.2.3**. Elle est publiée, elle tourne, et les garde-fous décrits plus
+bas sont réels. C'est aussi un projet dont le premier commit date du 9 septembre
+2026, et dont le propre critère de réussite vient tout juste de commencer à
+courir.
+
+| | |
+|---|---|
+| Garde-fous destructifs (seuil, source absente, corbeille, simulation) | Tests automatisés **et** d'intégration — mais contre un dossier local tenant lieu de Cloud |
+| Éprouvé avec un vrai compte | **OneDrive uniquement** |
+| Google Drive, Dropbox | Parcours OAuth implémenté, testé jusqu'à la page de consentement, jamais mené au bout avec un vrai compte |
+| S3, B2, WebDAV, SFTP | Implémentés, **jamais confrontés à un vrai service** |
+| Notifications Unraid | Validées sur un vrai Unraid 7.3.2 |
+| 30 jours d'utilisation réelle — le critère de réussite du projet (§22) | En cours, démarré le 9 septembre 2026 |
+| Bidirectionnel | Délibérément absent tant que sa matrice de tests destructifs n'est pas complète |
+| Interface en anglais | Pas faite — l'interface est en français uniquement |
+
+Deux conséquences.
+
+**Un dossier local ne sait pas reproduire ce qu'un Cloud fait mal** : listings
+non fiables, limitation de débit, cohérence différée. Ce sont exactement les
+conditions pour lesquelles les règles de *fail closed* existent, et elles n'ont
+pas encore été rencontrées en vrai.
+
+**L'usage réel trouve ce que la suite de tests ne peut pas voir.** Six défauts
+sont déjà remontés que 243 tests au vert n'avaient pas attrapés : un port OAuth
+qui ne pouvait pas fonctionner, des noms de fichiers accentués corrompus au
+décodage, des exécutions affichées « en cours » indéfiniment. Il y en aura
+d'autres. Commencez par une **Copie**, sur des données dont vous avez une
+sauvegarde — pas par un **Miroir** sur votre seul exemplaire.
+
 ## Ce qui fait la différence
 
 Beaucoup d'outils savent copier des fichiers vers un Cloud. La valeur est
@@ -94,6 +126,9 @@ suppression.
 ## Connecter un stockage Cloud
 
 Deux familles de fournisseurs, deux parcours.
+
+Le tableau de maturité plus haut dit lesquels ont réellement été éprouvés avec
+un vrai compte.
 
 ### Clé ou mot de passe — S3, Backblaze B2, WebDAV, SFTP
 

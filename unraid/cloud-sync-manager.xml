@@ -18,6 +18,8 @@
   <Overview>
     Synchronisez vos shares Unraid avec Google Drive, OneDrive, Dropbox, S3, Backblaze B2, WebDAV ou SFTP, depuis une interface Web — sans ligne de commande.
 
+    Version 0.2.3, en cours de qualification. L'interface est en français uniquement. Le bidirectionnel n'est pas disponible : il attend la fin de ses tests destructifs. À ce jour, seul OneDrive a été éprouvé avec un vrai compte — les autres fournisseurs sont implémentés mais pas encore confrontés à un service réel. Commencez par une Copie, sur des données dont vous avez une sauvegarde.
+
     Choisissez un stockage Cloud, un dossier local, un sens de synchronisation, planifiez, et laissez fonctionner. Moteur rclone.
 
     Sécurité des données :
