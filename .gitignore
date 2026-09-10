@@ -37,3 +37,6 @@ rclone.conf
 Thumbs.db
 .idea/
 .vscode/
+
+# Cache incrémental de tsc
+*.tsbuildinfo
