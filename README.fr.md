@@ -94,13 +94,19 @@ de commande, jamais dans un journal, jamais dans un export de configuration.
 
 Cherchez `Cloud Sync Manager` dans l'onglet **Apps**.
 
-### Depuis l'URL du modèle
+### Depuis le fichier de modèle
 
-**Docker → Add Container**, puis collez ceci dans le champ *Template* :
+Unraid a supprimé le champ *Template repositories* en 6.10 : une URL de modèle
+ne se colle donc nulle part. Il faut déposer le fichier sur la clé USB — depuis
+le terminal Unraid :
 
 ```
-https://raw.githubusercontent.com/renaldsouder/unraid-templates/main/cloud-sync-manager.xml
+wget -O /boot/config/plugins/dockerMan/templates-user/my-Cloud-Sync-Manager.xml   https://raw.githubusercontent.com/renaldsouder/unraid-templates/main/cloud-sync-manager.xml
 ```
+
+Puis **Docker → Add Container** et choisissez *Cloud-Sync-Manager* dans la
+liste **Template**, sous *User templates*. Chemins, port et variables sont
+pré-remplis.
 
 ### À la main
 

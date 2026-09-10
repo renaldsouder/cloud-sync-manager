@@ -88,13 +88,19 @@ configuration export.
 
 Search for `Cloud Sync Manager` in the **Apps** tab.
 
-### From the template URL
+### From the template file
 
-**Docker → Add Container**, and paste this into the *Template* field:
+Unraid removed the *Template repositories* field in 6.10, so a template URL
+cannot be pasted anywhere. Put the file on the flash drive instead — from the
+Unraid terminal:
 
 ```
-https://raw.githubusercontent.com/renaldsouder/unraid-templates/main/cloud-sync-manager.xml
+wget -O /boot/config/plugins/dockerMan/templates-user/my-Cloud-Sync-Manager.xml   https://raw.githubusercontent.com/renaldsouder/unraid-templates/main/cloud-sync-manager.xml
 ```
+
+Then **Docker → Add Container** and pick *Cloud-Sync-Manager* from the
+**Template** dropdown, under *User templates*. Every path, port and variable
+comes pre-filled.
 
 ### By hand
 
