@@ -55,9 +55,6 @@ conduit depuis l'interface, sans installer quoi que ce soit :
 Le jeton est rempli automatiquement. Pour OneDrive, `drive_id` et `drive_type`
 le sont aussi — l'application les demande à Microsoft pour vous.
 
-Ce parcours a besoin que le **port 53682** soit publié par le conteneur ; le
-template le prévoit. Il n'est utilisé que le temps d'une autorisation.
-
 Le jeton est écrit directement dans le `rclone.conf` du conteneur. Il n'est
 jamais réaffiché ensuite, ni inclus dans une sauvegarde de configuration.
 

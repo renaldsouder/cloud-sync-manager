@@ -109,18 +109,23 @@ def load_or_create_secret(path: Path) -> bytes:
     c'est le moyen de reprendre la main si un poste a été compromis.
     """
     if path.is_file():
-        data = path.read_bytes().strip()
+        # Surtout pas de `.strip()` : ce sont des octets aléatoires, et un
+        # sur vingt commence ou finit par un octet d'espacement. Les rogner
+        # rendrait la clé relue différente de celle qui a signé les jetons,
+        # et déconnecterait tout le monde au redémarrage du conteneur.
+        data = path.read_bytes()
         if len(data) >= 32:
             return data
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    secret = secrets.token_bytes(48)
-    path.write_bytes(secret)
+    path.write_bytes(secrets.token_bytes(48))
     try:
         path.chmod(0o600)
     except OSError:  # pragma: no cover - dépend du système de fichiers
         pass
-    return secret
+    # Relu depuis le disque : la clé rendue est exactement celle que les
+    # démarrages suivants retrouveront.
+    return path.read_bytes()
 
 
 # -- jeton de session ---------------------------------------------------------

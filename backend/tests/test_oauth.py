@@ -1,8 +1,9 @@
 """Autorisation OAuth conduite depuis l'interface (FIRST-002, CLOUD-003, P9).
 
 Le consentement lui-même exige un compte réel et ne peut pas être rejoué
-ici. Tout le reste l'est : le lancement de rclone, l'extraction du lien, sa
-réécriture vers une adresse joignable, et le refus des retours malformés.
+ici. Tout le reste l'est : le lancement de rclone, l'extraction du jeton
+anti-rejeu, le relais vers la page du fournisseur, et le refus des retours
+malformés.
 """
 
 from __future__ import annotations
@@ -10,39 +11,28 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from csm.services.oauth import AUTHORIZE_PORT, OAuthBroker, OAuthError, _rewrite_host
+from csm.services.oauth import AUTHORIZE_PORT, OAuthBroker, OAuthError, _state_of
 
 pytestmark = pytest.mark.usefixtures("rclone_path")
 
 
-# -- réécriture du lien -------------------------------------------------------
+# -- lecture du lien de rclone ------------------------------------------------
 
 
-def test_the_link_points_at_a_reachable_address() -> None:
-    """rclone imprime 127.0.0.1, qui désigne le conteneur — inutilisable
-    depuis le navigateur de l'utilisateur."""
-    rewritten = _rewrite_host(
-        "http://127.0.0.1:53682/auth?state=abc", "192.168.1.205"
-    )
-    assert rewritten == f"http://192.168.1.205:{AUTHORIZE_PORT}/auth?state=abc"
-
-
-def test_the_port_of_the_web_interface_is_not_reused() -> None:
-    """L'hôte peut arriver avec le port de la WebUI ; seul l'hôte compte."""
-    rewritten = _rewrite_host("http://127.0.0.1:53682/auth?state=x", "nas.local:3572")
-    assert rewritten.startswith(f"http://nas.local:{AUTHORIZE_PORT}/")
+def test_the_state_is_extracted() -> None:
+    assert _state_of("http://127.0.0.1:53682/auth?state=abc123") == "abc123"
+    assert _state_of("http://127.0.0.1:53682/auth") == ""
 
 
 # -- conduite de la session ---------------------------------------------------
 
 
-def test_starting_yields_a_link_the_browser_can_follow(rclone_path: str) -> None:
+def test_starting_yields_a_state(rclone_path: str) -> None:
     broker = OAuthBroker(rclone_path)
     try:
-        started = broker.start("onedrive", "192.168.1.205")
+        started = broker.start("onedrive")
         assert started["session_id"].endswith("-onedrive")
-        assert started["auth_url"].startswith(f"http://192.168.1.205:{AUTHORIZE_PORT}/auth")
-        assert "state=" in started["auth_url"]
+        assert started["state"], "rclone doit fournir un jeton anti-rejeu"
     finally:
         broker.cancel()
 
@@ -51,7 +41,7 @@ def test_an_unknown_provider_is_refused(rclone_path: str) -> None:
     broker = OAuthBroker(rclone_path)
     try:
         with pytest.raises(OAuthError):
-            broker.start("fournisseur-inexistant", "192.168.1.205")
+            broker.start("fournisseur-inexistant")
     finally:
         broker.cancel()
 
@@ -60,8 +50,8 @@ def test_a_second_authorisation_replaces_the_first(rclone_path: str) -> None:
     """Le port 53682 est unique : deux sessions se marcheraient dessus."""
     broker = OAuthBroker(rclone_path)
     try:
-        first = broker.start("dropbox", "192.168.1.205")
-        second = broker.start("onedrive", "192.168.1.205")
+        first = broker.start("dropbox")
+        second = broker.start("onedrive")
         assert first["session_id"] != second["session_id"]
 
         with pytest.raises(OAuthError, match="plus en cours"):
@@ -73,7 +63,7 @@ def test_a_second_authorisation_replaces_the_first(rclone_path: str) -> None:
 def test_a_redirect_without_a_code_is_refused(rclone_path: str) -> None:
     broker = OAuthBroker(rclone_path)
     try:
-        started = broker.start("dropbox", "192.168.1.205")
+        started = broker.start("dropbox")
         with pytest.raises(OAuthError, match="code d'autorisation"):
             broker.complete(started["session_id"], "http://localhost:53682/")
     finally:
@@ -89,21 +79,49 @@ def test_an_unknown_session_is_refused(rclone_path: str) -> None:
 # -- API ----------------------------------------------------------------------
 
 
-def test_the_endpoint_returns_a_usable_link(client: TestClient) -> None:
+def test_the_link_stays_on_our_own_origin(client: TestClient) -> None:
+    """rclone n'écoute que sur 127.0.0.1, la boucle locale du conteneur.
+
+    Publier son port ne sert à rien : le trafic arriverait sur l'interface
+    réseau, où personne n'écoute. Le lien doit donc désigner notre
+    application, qui relaiera.
+    """
     response = client.post("/api/oauth/start", json={"provider": "dropbox"})
     assert response.status_code == 200, response.text
 
     payload = response.json()
-    assert payload["port"] == AUTHORIZE_PORT
-    assert "/auth?state=" in payload["auth_url"]
+    assert payload["auth_url"].startswith("/api/oauth/auth?state=")
+    assert str(AUTHORIZE_PORT) not in payload["auth_url"]
     assert "erreur" in payload["instructions"], "l'écran d'erreur doit être annoncé"
 
     client.post("/api/oauth/cancel")
 
 
+def test_the_relay_forwards_to_the_provider(client: TestClient) -> None:
+    """Du clic jusqu'à la page de consentement — le maillon qui manquait."""
+    started = client.post("/api/oauth/start", json={"provider": "dropbox"}).json()
+    try:
+        relayed = client.get(started["auth_url"], follow_redirects=False)
+        assert relayed.status_code == 307
+
+        location = relayed.headers["location"]
+        assert location.startswith("https://"), "le navigateur part chez le fournisseur"
+        assert "dropbox.com" in location
+        assert "redirect_uri=" in location
+    finally:
+        client.post("/api/oauth/cancel")
+
+
+def test_the_relay_refuses_an_unknown_state(client: TestClient) -> None:
+    client.post("/api/oauth/cancel")
+    assert client.get("/api/oauth/auth?state=inconnu").status_code == 409
+
+
 def test_the_endpoint_refuses_an_unknown_provider(client: TestClient) -> None:
-    response = client.post("/api/oauth/start", json={"provider": "nimportequoi"})
-    assert response.status_code == 409
+    assert (
+        client.post("/api/oauth/start", json={"provider": "nimportequoi"}).status_code
+        == 409
+    )
 
 
 def test_completing_without_a_session_is_refused(client: TestClient) -> None:

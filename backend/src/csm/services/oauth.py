@@ -11,6 +11,12 @@ page de consentement du fournisseur, et la racine reçoit le code en retour.
 Les deux vivent donc *dans le conteneur*, et il suffit que le navigateur de
 l'utilisateur puisse joindre ce port.
 
+**Le serveur de rclone n'écoute que sur ``127.0.0.1``**, l'interface interne
+du conteneur : publier le port 53682 ne suffit pas, le trafic arrive sur
+l'interface réseau où personne n'écoute. On relaie donc ``/auth`` depuis
+notre propre port, déjà publié — rclone n'y répond qu'une redirection vers
+le fournisseur, qu'il suffit de transmettre.
+
 **Ce qui résiste.** L'URL de redirection enregistrée par rclone chez les
 fournisseurs est ``http://localhost:53682/``. Après consentement, le
 navigateur revient donc sur *sa propre* machine, pas sur le serveur, et
@@ -81,12 +87,12 @@ class OAuthBroker:
 
     # -- démarrage ----------------------------------------------------------
 
-    def start(self, provider: str, public_host: str) -> dict[str, str]:
+    def start(self, provider: str) -> dict[str, str]:
         """Lance l'autorisation et rend le lien à ouvrir dans le navigateur.
 
-        ``public_host`` est l'adresse par laquelle l'utilisateur joint
-        l'application : le lien que rclone imprime désigne ``127.0.0.1``,
-        c'est-à-dire le conteneur, et serait inutilisable tel quel.
+        Le lien pointe sur **notre** application, qui relaiera la redirection :
+        celui que rclone imprime désigne ``127.0.0.1:53682``, joignable du seul
+        intérieur du conteneur.
         """
         with self._lock:
             self._discard_locked()
@@ -118,10 +124,7 @@ class OAuthBroker:
             )
             self._session = session
 
-        return {
-            "session_id": session.id,
-            "auth_url": _rewrite_host(link, public_host),
-        }
+        return {"session_id": session.id, "state": _state_of(link)}
 
     def _await_link(self, process: subprocess.Popen[str]) -> str | None:
         deadline = time.time() + START_TIMEOUT
@@ -209,13 +212,41 @@ class OAuthBroker:
             pass
 
 
-def _rewrite_host(link: str, public_host: str) -> str:
-    """Remplace ``127.0.0.1`` par l'adresse que le navigateur peut joindre."""
-    parsed = urllib.parse.urlparse(link)
-    host = public_host.split(":")[0]
-    return urllib.parse.urlunparse(
-        parsed._replace(netloc=f"{host}:{AUTHORIZE_PORT}")
-    )
+def _state_of(link: str) -> str:
+    """Jeton anti-rejeu que rclone attend en retour."""
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)
+    values = query.get("state") or [""]
+    return values[0]
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):  # type: ignore[override]
+        return None
+
+
+def provider_redirect(state: str, timeout: float = 15.0) -> str:
+    """Adresse de consentement du fournisseur, obtenue de rclone.
+
+    rclone répond une redirection ; on la transmet au navigateur plutôt que
+    de le faire parler directement à un port qu'il ne peut pas joindre.
+    """
+    url = f"http://127.0.0.1:{AUTHORIZE_PORT}/auth?{urllib.parse.urlencode({'state': state})}"
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        with opener.open(url, timeout=timeout) as response:
+            raise OAuthError(
+                f"rclone n'a pas redirigé (HTTP {response.status}) — "
+                "l'autorisation a peut-être expiré"
+            )
+    except urllib.error.HTTPError as exc:
+        location = exc.headers.get("Location")
+        if exc.code in (301, 302, 303, 307, 308) and location:
+            return location
+        raise OAuthError(f"rclone a répondu HTTP {exc.code}") from exc
+    except (urllib.error.URLError, OSError) as exc:
+        raise OAuthError(
+            "aucune autorisation n'est en cours — relancez-la"
+        ) from exc
 
 
 def describe_drive(access_token: str, timeout: float = 15.0) -> dict[str, str]:

@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from csm.api.deps import get_adapter
@@ -40,17 +41,17 @@ def start(
     payload: StartIn, request: Request, broker: OAuthBroker = Depends(get_broker)
 ) -> dict[str, Any]:
     """Ouvre une autorisation et rend le lien à suivre dans le navigateur."""
-    # L'adresse par laquelle l'utilisateur nous joint est la seule que son
-    # navigateur saura atteindre : le lien de rclone désigne le conteneur.
-    host = request.headers.get("host", "").split(":")[0] or "127.0.0.1"
     try:
-        started = broker.start(payload.provider, host)
+        started = broker.start(payload.provider)
     except OAuthError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
     return {
-        **started,
-        "port": AUTHORIZE_PORT,
+        "session_id": started["session_id"],
+        # Lien relatif : le navigateur reste sur notre origine, déjà
+        # publiée et déjà authentifiée. Le serveur de rclone, lui, n'écoute
+        # que sur la boucle locale du conteneur.
+        "auth_url": f"/api/oauth/auth?state={started['state']}",
         "instructions": (
             "Ouvrez ce lien, autorisez l'accès, puis recopiez ici l'adresse "
             "complète de la page sur laquelle votre navigateur atterrit — "
@@ -90,6 +91,20 @@ def complete(
             }
 
     return {"options": options}
+
+
+@router.get("/oauth/auth")
+def relay(state: str) -> RedirectResponse:
+    """Relaie le navigateur vers la page de consentement du fournisseur.
+
+    rclone ne répond ici qu'une redirection, mais sur un port que seul le
+    conteneur peut joindre. On la transmet depuis notre propre port.
+    """
+    try:
+        destination = oauth.provider_redirect(state)
+    except OAuthError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return RedirectResponse(destination, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @router.post("/oauth/cancel", status_code=status.HTTP_204_NO_CONTENT)

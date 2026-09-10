@@ -55,9 +55,7 @@ ENV CSM_CONFIG_DIR=/config \
     PGID=100 \
     UMASK=000
 
-# 53682 : port sur lequel rclone conduit l'autorisation OAuth. Ouvert
-# seulement le temps d'une autorisation, jamais en permanence.
-EXPOSE 3572 53682
+EXPOSE 3572
 VOLUME ["/config"]
 
 # Unraid affiche cet état dans son interface Docker.
@@ -66,7 +64,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 LABEL org.opencontainers.image.title="Cloud Sync Manager" \
       org.opencontainers.image.description="Synchronisation Cloud pour Unraid, moteur rclone" \
-      org.opencontainers.image.version="0.2.1" \
+      org.opencontainers.image.version="0.2.2" \
       org.opencontainers.image.licenses="GPL-3.0-or-later"
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

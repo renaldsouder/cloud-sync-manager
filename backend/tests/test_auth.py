@@ -61,6 +61,29 @@ def test_a_token_survives_a_restart(tmp_path: Path) -> None:
     assert read_token(token, reloaded) is not None
 
 
+def test_a_key_bordered_by_whitespace_bytes_is_kept_intact(tmp_path: Path) -> None:
+    """Une clé est faite d'octets aléatoires, pas de texte.
+
+    Environ une sur vingt commence ou finit par un octet d'espacement. La
+    rogner à la relecture invaliderait toutes les sessions au redémarrage —
+    défaut resté invisible tant que le tirage était favorable.
+    """
+    key = tmp_path / "session.key"
+    piegee = bytes([10, 9, 32]) + bytes([1]) * 40 + bytes([32, 13, 10])
+    key.write_bytes(piegee)
+
+    relue = load_or_create_secret(key)
+
+    assert relue == piegee, "la clé relue doit être identique, octet pour octet"
+    assert read_token(issue_token(relue), load_or_create_secret(key)) is not None
+
+
+def test_the_key_returned_at_creation_matches_the_one_on_disk(tmp_path: Path) -> None:
+    key = tmp_path / "session.key"
+    creee = load_or_create_secret(key)
+    assert creee == key.read_bytes()
+
+
 def test_deleting_the_key_revokes_every_session(tmp_path: Path) -> None:
     """C'est le moyen de reprendre la main si un poste a été compromis."""
     key = tmp_path / "session.key"
