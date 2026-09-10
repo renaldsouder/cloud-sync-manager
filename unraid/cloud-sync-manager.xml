@@ -46,11 +46,11 @@
 
   <Config Name="PUID" Target="PUID" Default="99" Mode=""
           Description="Identifiant du propriétaire des fichiers écrits. 99 = nobody."
-          Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+          Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
 
   <Config Name="PGID" Target="PGID" Default="100" Mode=""
           Description="Groupe propriétaire des fichiers écrits. 100 = users."
-          Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+          Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
 
   <Config Name="UMASK" Target="UMASK" Default="000" Mode=""
           Description="Droits des fichiers écrits. 000 laisse les partages SMB accessibles."
