@@ -65,7 +65,10 @@ export default function App() {
   return (
     <main className="shell">
       <header className="shell__header">
-        <h1>Cloud Sync Manager</h1>
+        <h1>
+          <img className="shell__logo" src="/favicon.png" alt="" />
+          Cloud Sync Manager
+        </h1>
         <p className="shell__subtitle">
           Synchronisation Cloud pour Unraid{health ? ` — version ${health.version}` : ""}
         </p>
@@ -153,7 +156,9 @@ export default function App() {
 
       <footer className="shell__footer">
         Copie et Miroir dans les deux sens, protections destructives, planification,
-        filtres, notifications et sauvegarde de configuration (J6).
+        filtres, notifications et sauvegarde de configuration. Le bidirectionnel
+        attend la fin de ses tests destructifs : à moitié fiable, il perdrait des
+        données.
       </footer>
     </main>
   );
