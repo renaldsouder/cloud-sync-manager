@@ -4,7 +4,7 @@
   <Repository>ghcr.io/renaldsouder/cloud-sync-manager:latest</Repository>
   <Registry>https://github.com/renaldsouder/cloud-sync-manager/pkgs/container/cloud-sync-manager</Registry>
   <Project>https://github.com/renaldsouder/cloud-sync-manager</Project>
-  <Support>https://forums.unraid.net/topic/XXXXXX-support-cloud-sync-manager/</Support>
+  <Support>https://github.com/renaldsouder/cloud-sync-manager/issues</Support>
   <TemplateURL>https://raw.githubusercontent.com/renaldsouder/unraid-templates/main/cloud-sync-manager.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/renaldsouder/unraid-templates/main/images/cloud-sync-manager.png</Icon>
 

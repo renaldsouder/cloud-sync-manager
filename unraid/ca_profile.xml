@@ -2,7 +2,7 @@
 <Profile>
   <Author>renaldsouder</Author>
   <Repository>https://github.com/renaldsouder/unraid-templates</Repository>
-  <Support>https://forums.unraid.net/topic/XXXXXX-support-cloud-sync-manager/</Support>
+  <Support>https://github.com/renaldsouder/cloud-sync-manager/issues</Support>
   <Description>
     Applications maintenues par renaldsouder pour Unraid.
   </Description>

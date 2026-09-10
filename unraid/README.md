@@ -17,23 +17,31 @@ unraid/
 
 ## Avant de soumettre
 
-Quatre valeurs restent à renseigner. Elles sont marquées `renaldsouder` ou
-`XXXXXX` dans les deux fichiers XML.
-
-| Valeur | Où | Comment l'obtenir |
+| Valeur | État | Détail |
 |---|---|---|
-| Compte GitHub | `Repository`, `Registry`, `Project`, `TemplateURL`, `Icon`, `ca_profile.xml` | Votre pseudonyme GitHub |
-| Nom du dépôt de templates | `TemplateURL`, `Icon`, `ca_profile.xml` | Par convention `unraid-templates` |
-| Fil de support | `Support`, `ca_profile.xml` | À créer sur les forums Unraid, **après** avoir une image publiable |
-| Image publiée | `Repository` | Poussée sur GHCR par la CI, en `ghcr.io/<compte>/cloud-sync-manager` |
+| Compte GitHub | ✅ | `renaldsouder`, en dur dans les deux XML |
+| Dépôt de templates | ✅ | `renaldsouder/unraid-templates` |
+| Image publiée | ✅ | `ghcr.io/renaldsouder/cloud-sync-manager`, poussée par la CI |
+| Fil de support | ⏳ | `Support` pointe provisoirement sur les *issues* GitHub |
 
 La CI (`.github/workflows/ci.yml`) n'a **pas** besoin du pseudonyme : GitHub
 le fournit à l'exécution via `github.repository_owner`. Seuls les deux XML,
 statiques et lus par Community Applications, le portent en dur.
 
-L'ordre importe : l'image doit exister et être installable avant d'ouvrir le
-fil de support, et le fil doit exister avant la soumission — le portail
-vérifie que l'URL répond.
+**Le fil de support reste à ouvrir.** `Support` désignait auparavant une URL
+de forum inexistante, qui renvoyait 404 : mieux vaut une page d'issues qui
+répond qu'un lien mort. Community Applications attend cependant un fil sur
+les forums Unraid — il faudra le créer et remplacer l'URL dans les deux XML
+**avant** toute soumission, le portail vérifiant que l'adresse répond.
+
+## Ce dépôt n'est pas une soumission
+
+Publier ces fichiers rend l'installation par URL de template possible et
+permet de l'éprouver. Cela ne met l'application dans aucun catalogue : rien
+n'apparaît dans Community Applications tant que la soumission n'a pas été
+faite, et elle ne doit pas l'être avant que le §22 soit tenu — 30 jours
+d'utilisation réelle sans perte silencieuse, et plusieurs fournisseurs
+réellement éprouvés (§20.4).
 
 ## Vérifier le template
 
