@@ -234,6 +234,18 @@ class TaskEventOut(BaseModel):
     message: str | None = None
 
 
+class TaskEventSummary(BaseModel):
+    """Synthèse du détail d'une exécution (LOG-002).
+
+    Permet à l'interface d'afficher les filtres et leur cardinalité sans
+    rapatrier des milliers de lignes, et de signaler une liste tronquée.
+    """
+
+    counts: dict[str, int] = {}
+    total: int = 0
+    truncated: bool = False
+
+
 class DashboardCounters(BaseModel):
     total: int = 0
     scheduled: int = 0

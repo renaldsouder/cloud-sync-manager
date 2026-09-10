@@ -216,6 +216,10 @@ rclone, les journaux et les jeux de filtres appliqués.
 - **Progression en direct** — fichier courant, débit, temps restant, en SSE
 - **Historique** — résultat, code de sortie, fichiers transférés et supprimés,
   version de rclone, avec rétention configurable
+- **Détail fichier par fichier** — ouvrez une exécution pour voir chaque fichier
+  transféré, supprimé, ignoré ou en erreur, avec recherche par chemin. Une liste
+  tronquée le dit franchement : ne pas y trouver un fichier ne signifie jamais
+  qu'il n'a pas été traité.
 - **Notifications** — API intégrée d'Unraid et webhook générique
 - **Sauvegarde** — export et restauration de la configuration, identifiants
   volontairement exclus ; les tâches restaurées arrivent en pause

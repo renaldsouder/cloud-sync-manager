@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from csm.api.deps import get_session, get_settings_dep
@@ -16,6 +16,7 @@ from csm.api.schemas import (
     RunOut,
     TaskCreate,
     TaskEventOut,
+    TaskEventSummary,
     TaskOut,
     TaskRunStart,
     TaskUpdate,
@@ -23,7 +24,7 @@ from csm.api.schemas import (
 from csm.config import Settings
 from csm.db.models import Task, TaskEvent, TaskRun
 from csm.services import tasks as service
-from csm.services.runner import RunError, RunManager
+from csm.services.runner import TRUNCATION_NOTICE, RunError, RunManager
 
 router = APIRouter(tags=["tâches"])
 
@@ -194,10 +195,25 @@ def get_run(
     return RunOut.build(run, live=runner.get(run_id))
 
 
+def _path_filter(q: str) -> Any:
+    """Recherche par sous-chaîne de chemin (LOG-002).
+
+    ``%`` et ``_`` sont échappés : saisis dans le champ de recherche, ce sont
+    des caractères ordinaires d'un nom de fichier, pas des jokers.
+
+    ``ilike`` reste insensible à la casse sur l'ASCII seulement — SQLite ne
+    replie pas les accents. « é » trouve bien « é », mais pas « É ».
+    """
+    escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return TaskEvent.path.ilike(f"%{escaped}%", escape="\\")
+
+
 @router.get("/runs/{run_id}/events", response_model=list[TaskEventOut])
 def list_events(
     run_id: str,
     kind: str | None = None,
+    q: str | None = None,
+    offset: int = 0,
     limit: int = 500,
     session: Session = Depends(get_session),
 ) -> list[TaskEvent]:
@@ -206,8 +222,46 @@ def list_events(
     statement = select(TaskEvent).where(TaskEvent.run_id == run_id)
     if kind:
         statement = statement.where(TaskEvent.kind == kind)
-    return list(
-        session.scalars(statement.order_by(TaskEvent.id).limit(min(limit, 2000))).all()
+    if q:
+        statement = statement.where(_path_filter(q))
+    statement = statement.order_by(TaskEvent.id).offset(max(offset, 0))
+    return list(session.scalars(statement.limit(min(limit, 2000))).all())
+
+
+@router.get("/runs/{run_id}/events/summary", response_model=TaskEventSummary)
+def summarise_events(
+    run_id: str,
+    q: str | None = None,
+    session: Session = Depends(get_session),
+) -> TaskEventSummary:
+    """Cardinalité par type, et aveu de troncature (LOG-002, §14).
+
+    Les compteurs suivent la recherche mais ignorent le filtre de type :
+    choisir un type ne doit pas faire bouger les nombres sur lesquels on
+    vient de cliquer.
+    """
+    if session.get(TaskRun, run_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "exécution introuvable")
+
+    statement = select(TaskEvent.kind, func.count()).where(TaskEvent.run_id == run_id)
+    if q:
+        statement = statement.where(_path_filter(q))
+    counts = {
+        str(kind): int(total)
+        for kind, total in session.execute(statement.group_by(TaskEvent.kind)).all()
+    }
+
+    truncated = session.scalar(
+        select(func.count())
+        .select_from(TaskEvent)
+        .where(TaskEvent.run_id == run_id)
+        .where(TaskEvent.kind == "warning")
+        .where(TaskEvent.message.startswith(TRUNCATION_NOTICE))
+    )
+    return TaskEventSummary(
+        counts=counts,
+        total=sum(counts.values()),
+        truncated=bool(truncated),
     )
 
 

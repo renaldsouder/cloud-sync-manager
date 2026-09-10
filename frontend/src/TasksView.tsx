@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import BlockedRun from "./BlockedRun";
+import RunDetail from "./RunDetail";
 import ScheduleEditor from "./ScheduleEditor";
 import TaskWizard from "./TaskWizard";
 import {
@@ -42,6 +43,7 @@ export default function TasksView() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [live, setLive] = useState<Record<string, LiveRun>>({});
   const [runs, setRuns] = useState<Record<string, Run[]>>({});
+  const [detail, setDetail] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [planning, setPlanning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,9 +87,11 @@ export default function TasksView() {
   async function toggleHistory(task: Task) {
     if (expanded === task.id) {
       setExpanded(null);
+      setDetail(null);
       return;
     }
     setExpanded(task.id);
+    setDetail(null);
     try {
       setRuns((previous) => ({ ...previous, [task.id]: [] }));
       const history = await fetchRuns(task.id);
@@ -196,13 +200,23 @@ export default function TasksView() {
                   {history?.length === 0 && <li className="state">Aucune exécution.</li>}
                   {history?.map((run) => (
                     <li key={run.id}>
-                      <span className={`dot dot--${run.status}`} aria-hidden="true" />
-                      {new Date(run.started_at).toLocaleString("fr-FR")} ·{" "}
-                      {STATUS_LABEL[run.status] ?? run.status}
-                      {run.dry_run && " (simulation)"} · {run.transferred_files} fichier(s) ·{" "}
-                      {formatBytes(run.transferred_bytes)}
-                      {run.deleted_files > 0 && ` · ${run.deleted_files} supprimé(s)`}
-                      {run.errors_count > 0 && ` · ${run.errors_count} erreur(s)`}
+                      <button
+                        type="button"
+                        className="history__row"
+                        aria-expanded={detail === run.id}
+                        onClick={() => setDetail(detail === run.id ? null : run.id)}
+                      >
+                        <span className={`dot dot--${run.status}`} aria-hidden="true" />
+                        {new Date(run.started_at).toLocaleString("fr-FR")} ·{" "}
+                        {STATUS_LABEL[run.status] ?? run.status}
+                        {run.dry_run && " (simulation)"} · {run.transferred_files} fichier(s) ·{" "}
+                        {formatBytes(run.transferred_bytes)}
+                        {run.deleted_files > 0 && ` · ${run.deleted_files} supprimé(s)`}
+                        {run.errors_count > 0 && ` · ${run.errors_count} erreur(s)`}
+                      </button>
+                      {detail === run.id && (
+                        <RunDetail runId={run.id} onClose={() => setDetail(null)} />
+                      )}
                     </li>
                   ))}
                 </ul>

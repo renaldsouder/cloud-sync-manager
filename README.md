@@ -203,6 +203,9 @@ configuration, the logs and the applied filter sets.
 - **Live progress** — current file, throughput, ETA, over SSE
 - **History** — per-run result, exit code, transferred and deleted files, rclone
   version, with configurable retention
+- **Per-file detail** — open a run to see every file transferred, deleted,
+  skipped or in error, searchable by path. A truncated list says so, loudly:
+  not finding a file there never means it was not handled.
 - **Notifications** — Unraid's built-in API and a generic webhook
 - **Backup** — export and restore the configuration, credentials excluded by
   design; restored tasks arrive paused

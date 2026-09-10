@@ -45,6 +45,12 @@ logger = logging.getLogger("csm.runner")
 #: compteurs restent exacts mais le détail est tronqué (§13, LOG-005).
 MAX_STORED_EVENTS = 5000
 
+#: Début du message d'avertissement écrit quand le détail est tronqué.
+#: La vue de détail (LOG-002) s'en sert pour signaler une liste incomplète :
+#: une liste tronquée qui paraîtrait complète ferait conclure à tort qu'un
+#: fichier n'a pas été transféré.
+TRUNCATION_NOTICE = "détail tronqué"
+
 SUPPORTED_MODES = frozenset({"copy", "mirror"})
 
 RUN_TO_TASK_STATUS = {
@@ -510,7 +516,7 @@ class RunManager:
                         run_id=live.run_id,
                         kind="warning",
                         message=(
-                            f"détail tronqué au-delà de {MAX_STORED_EVENTS} "
+                            f"{TRUNCATION_NOTICE} au-delà de {MAX_STORED_EVENTS} "
                             "événements ; les compteurs restent exacts"
                         ),
                     )

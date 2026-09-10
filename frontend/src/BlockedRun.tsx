@@ -27,7 +27,7 @@ export default function BlockedRun({ runId, taskName, onConfirm }: Props) {
     setShowAll(false);
     void Promise.all([
       fetchRun(runId, controller.signal),
-      fetchEvents(runId, "skip_delete", controller.signal),
+      fetchEvents(runId, { kind: "skip_delete" }, controller.signal),
     ])
       .then(([loadedRun, loadedPaths]) => {
         setRun(loadedRun);

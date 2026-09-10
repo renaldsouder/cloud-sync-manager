@@ -228,7 +228,7 @@ Avant toute mise à jour majeure, sauvegardez aussi le dossier appdata.
 | Tâche *Bloquée* | Seuil de suppression dépassé | Ouvrez la tâche : la liste des fichiers concernés est affichée |
 | « la source ne contient aucun fichier… » | Share démonté ou chemin disparu | Vérifiez le montage avant de relancer |
 | Fichiers inaccessibles depuis SMB | `PUID`/`PGID`/`UMASK` | Remettez `99` / `100` / `000` |
-| Authentification expirée | Jeton OAuth révoqué | Rejouez `rclone authorize` et recollez le jeton |
+| Authentification expirée | Jeton OAuth révoqué | Recréez le stockage et refaites **Autoriser l'accès** depuis l'interface |
 | « certificat non vérifiable » | Unraid en HTTPS avec certificat auto-signé | Cochez « accepter un certificat auto-signé », ou passez l'adresse en `http://` |
 | « clé d'API refusée » | Permissions insuffisantes | Ajoutez `NOTIFICATIONS:READ_ANY` à la clé |
 | Heures de planification décalées | `TZ` absent | Renseignez votre fuseau |
@@ -237,6 +237,29 @@ Chaque exécution conserve son résultat, son code de retour, la version de
 rclone utilisée et la liste des fichiers transférés, ignorés, supprimés ou en
 erreur. Le jeu de filtres appliqué est conservé dans
 `/config/filters/<id>.filter`.
+
+### Consulter le détail d'une exécution
+
+Onglet **Tâches** → **Historique** → cliquez sur une exécution. La liste
+s'ouvre sous la ligne : un filtre par type, une recherche par chemin, et la
+taille de chaque fichier.
+
+Trois choses à savoir :
+
+- Les **fichiers inchangés ne sont pas journalisés**. Une exécution qui n'avait
+  rien à faire n'affiche donc aucun détail — ce n'est pas une anomalie. Une
+  simulation, elle, liste ce qu'elle aurait ignoré.
+- Les **suppressions apparaissent** même si les fichiers ont été déplacés dans
+  la corbeille `.cloudsync-trash` : ils restent récupérables, mais la trace est
+  conservée.
+- Au-delà d'un plafond d'enregistrement, la liste est **tronquée et le dit** en
+  rouge. Les compteurs de l'exécution restent exacts : l'absence d'un fichier
+  dans une liste tronquée ne signifie pas qu'il n'a pas été traité.
+
+La durée de conservation se règle avec `CSM_HISTORY_RETENTION_DAYS` (90 jours
+par défaut) et `CSM_HISTORY_KEEP_RUNS` (200 exécutions). Une exécution n'est
+purgée que si elle dépasse **les deux** : une tâche mensuelle garde donc son
+historique bien au-delà de 90 jours.
 
 Aucun secret n'apparaît dans les journaux : ils passent tous par un filtre de
 masquage centralisé.

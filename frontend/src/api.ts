@@ -219,11 +219,51 @@ export type TaskEvent = {
 export const fetchRun = (runId: string, signal?: AbortSignal) =>
   request<Run>(`/api/runs/${runId}`, { signal });
 
-export const fetchEvents = (runId: string, kind?: string, signal?: AbortSignal) =>
-  request<TaskEvent[]>(
-    `/api/runs/${runId}/events${kind ? `?kind=${encodeURIComponent(kind)}` : ""}`,
+export type TaskEventSummary = {
+  /** Nombre d'événements par type, pour la recherche en cours. */
+  counts: Record<string, number>;
+  total: number;
+  /** Le détail a dépassé le plafond de stockage : la liste est incomplète. */
+  truncated: boolean;
+};
+
+export type EventQuery = {
+  kind?: string;
+  q?: string;
+  offset?: number;
+  limit?: number;
+};
+
+export const fetchEvents = (
+  runId: string,
+  query: EventQuery = {},
+  signal?: AbortSignal,
+) => {
+  const params = new URLSearchParams();
+  if (query.kind) params.set("kind", query.kind);
+  if (query.q) params.set("q", query.q);
+  if (query.offset) params.set("offset", String(query.offset));
+  if (query.limit) params.set("limit", String(query.limit));
+  const suffix = params.toString();
+  return request<TaskEvent[]>(
+    `/api/runs/${runId}/events${suffix ? `?${suffix}` : ""}`,
     { signal },
   );
+};
+
+export const fetchEventSummary = (
+  runId: string,
+  q?: string,
+  signal?: AbortSignal,
+) => {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  const suffix = params.toString();
+  return request<TaskEventSummary>(
+    `/api/runs/${runId}/events/summary${suffix ? `?${suffix}` : ""}`,
+    { signal },
+  );
+};
 
 export const stopRun = (runId: string) =>
   request<Run>(`/api/runs/${runId}/stop`, { method: "POST" });

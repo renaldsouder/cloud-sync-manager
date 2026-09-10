@@ -449,10 +449,118 @@ body {
 }
 
 .history li {
+  padding: 2px 0;
+}
+
+/* La ligne d'exécution devient le bouton qui ouvre son détail (LOG-002). */
+.history__row {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 4px 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history__row:hover {
+  color: var(--ink);
+}
+
+.detail {
+  margin: 8px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.detail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.detail__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.chip--button {
+  cursor: pointer;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+}
+
+.chip--active {
+  cursor: pointer;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 1px 9px;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+}
+
+.detail__files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 380px;
+  overflow-y: auto;
+  font-size: 12.5px;
+}
+
+.detail__files li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail__path {
+  flex: 1;
+  /* Un chemin long doit se couper, pas pousser la page en largeur. */
+  overflow-wrap: anywhere;
+}
+
+.detail__size {
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.tag {
+  flex: 0 0 auto;
+  min-width: 96px;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+}
+
+.tag--transfer {
+  color: var(--ok);
+}
+
+.tag--delete,
+.tag--error {
+  color: var(--ko);
+}
+
+.tag--warning,
+.tag--skip_delete {
+  color: var(--accent);
 }
 
 .choices {
