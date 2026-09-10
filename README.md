@@ -1,113 +1,237 @@
-# Cloud Sync Manager
+<p align="center">
+  <img src="unraid/images/cloud-sync-manager.png" width="120" alt="Cloud Sync Manager">
+</p>
 
-Synchronisation Cloud pour Unraid : choisir un stockage distant, un dossier
-local, un sens de synchronisation, planifier, et laisser fonctionner — sans
-ligne de commande.
+<h1 align="center">Cloud Sync Manager</h1>
 
-Moteur [rclone](https://rclone.org). Un seul conteneur, une seule WebUI.
+<p align="center">
+  Cloud synchronisation for Unraid — pick a remote, pick a folder, pick a
+  direction, schedule it, and let it run. No command line.
+</p>
 
-> **État : J6 — périmètre V1.** Copie et Miroir dans les deux sens, protections
-> destructives complètes, planification sans cron, tableau de bord, filtres avec
-> outil de test, limites de transfert, notifications, sauvegarde et restauration
-> de configuration, template Community Applications et documentation.
-> Le bidirectionnel reste hors périmètre tant que sa matrice de tests n'existe pas.
+<p align="center">
+  <a href="README.fr.md">🇫🇷 Version française</a> ·
+  <a href="https://rclone.org">Powered by rclone</a> ·
+  <a href="LICENSE">GPL-3.0-or-later</a>
+</p>
 
-- Cahier des charges : [`docs/Cloud_Sync_Manager_Cahier_des_charges.md`](docs/Cloud_Sync_Manager_Cahier_des_charges.md)
-- Décisions techniques : [`docs/Propositions_Techniques_Unraid.md`](docs/Propositions_Techniques_Unraid.md)
-- Installation et exploitation : [`docs/Installation_Unraid.md`](docs/Installation_Unraid.md)
-- Règles de développement : [`CLAUDE.md`](CLAUDE.md)
+---
 
-## Structure
+Unraid stores data well, but syncing a share to a cloud provider means
+assembling tools, learning commands, or installing a generic interface that was
+not designed for Unraid. Cloud Sync Manager aims at the experience of Synology
+Cloud Sync: choose a provider, choose a folder, choose a direction, done.
+
+One container. One web interface. rclone underneath.
+
+> **Note on language** — the web interface is currently **French only**.
+> Everything else — configuration, documentation, code — is bilingual or
+> English. Interface translation is on the roadmap.
+
+## What makes it different
+
+Plenty of tools can copy files to a cloud. The value here is in what happens
+when something goes wrong.
+
+**Nothing destructive is silent.** A mirror run measures what it would delete
+*before* touching anything. Past a configurable threshold the task stops in a
+`Blocked` state and asks you to confirm — and the button names the real action,
+"Delete 423 files", never "Confirm". The files are listed.
+
+**A missing source never becomes a mass deletion.** If the source is
+unreachable, or empty while the destination is not, the task fails without
+propagating anything. That is the unmounted-share scenario, and it is the one
+that destroys data in tools that assume "empty means delete everything".
+
+**Deletions are reversible.** They are moved to a `.cloudsync-trash` folder at
+the destination, purged on a retention you control. Overwritten versions go
+there too.
+
+**An interrupted run is never reported as successful.** Stop it, or crash the
+container mid-transfer, and the run is recorded as `Interrupted`.
+
+**Simulation before destruction.** A mirror's first run requires a dry run, and
+so does any change of source, destination or direction.
+
+**Cloud credentials never leak.** They live in rclone's config file, never in
+the database, never in a command-line argument, never in a log, never in a
+configuration export.
+
+## Installing on Unraid
+
+### From Community Applications
+
+Search for `Cloud Sync Manager` in the **Apps** tab.
+
+### From the template URL
+
+**Docker → Add Container**, and paste this into the *Template* field:
 
 ```
-backend/    API FastAPI, modèle SQLite, migrations Alembic, adaptateur rclone
-frontend/   WebUI React + TypeScript (Vite)
-docker/     Dockerfile multi-stage et entrypoint PUID/PGID
-unraid/     Template Community Applications, profil de dépôt et icône
-docs/       Cahier des charges, décisions et documentation d'installation
+https://raw.githubusercontent.com/renaldsouder/unraid-templates/main/cloud-sync-manager.xml
 ```
 
-## Développement
+### By hand
 
-### Backend
+| Setting | Value |
+|---|---|
+| Repository | `ghcr.io/renaldsouder/cloud-sync-manager:latest` |
+| Network | `bridge` |
+| Port | `3572` → `3572` |
+| Path | `/config` → `/mnt/user/appdata/cloud-sync-manager` |
+| Path | `/mnt/user` → `/mnt/user` |
+| Variables | `PUID=99`, `PGID=100`, `UMASK=000`, `TZ=Europe/Paris` |
 
-Les tests d'intégration ont besoin du binaire rclone. Déposez-le dans
-`backend/.tools/` (ignoré par git) ou renseignez `CSM_RCLONE_BINARY` ; à défaut,
-ces tests sont ignorés plutôt qu'en échec.
+The shares path is mapped **to the same path on both sides** so that what the
+interface shows is exactly what you see in Unraid. `appdata`, `system` and
+`domains` can never be a sync *destination*, whatever you configure.
+
+Then open the WebUI and set a password under **Paramètres → Accès à
+l'interface**. Until you do, the application warns you on every screen that
+anyone on your network can trigger a deletion.
+
+## Connecting a cloud provider
+
+Two kinds of providers, two experiences.
+
+### Key or password — S3, Backblaze B2, WebDAV, SFTP
+
+Everything is typed into the interface. Add the storage, fill the fields, test
+it. Nothing else to install.
+
+### Browser authorisation — Google Drive, OneDrive, Dropbox
+
+These three require an OAuth round trip through a browser. It is driven from
+the interface — you never install rclone or open a terminal.
+
+1. **Stockages Cloud → Ajouter un stockage**, pick the provider.
+2. Click **Autoriser l'accès**. A tab opens on the provider's sign-in page.
+3. Sign in and grant access.
+4. Your browser lands on a **connection-error page at `localhost:53682`**.
+   **This is expected.** The redirect address registered by rclone with the
+   providers points at `localhost`, which is *your* machine, not the server —
+   so nothing answers there.
+5. **Copy the full address of that error page** from the address bar. It looks
+   like `http://localhost:53682/?code=…&state=…`.
+6. Paste it into the field in the interface and click **Terminer
+   l'autorisation**.
+
+The token is filled in automatically. For OneDrive, `drive_id` and `drive_type`
+are too — the application asks Microsoft for them on your behalf.
+
+> **If OneDrive reports a missing drive id**, the storage is still created with
+> its token, and the list shows a **Compléter la configuration** button that
+> queries Microsoft again. No need to redo the authorisation.
+
+Removing that final copy-paste would require registering our own OAuth
+application with each provider, with the public domain and review process that
+implies. One paste is the best available trade today.
+
+**Always test a storage after creating it.** A successful connection does not
+mean every operation is supported by that provider.
+
+The token is written straight into the container's `rclone.conf`. It is never
+displayed again, and never included in a configuration backup. The longer
+walkthrough, with the failure cases, is in
+[the installation guide](docs/Installation_Unraid.md#2-ajouter-un-stockage-cloud)
+(French).
+
+## First synchronisation
+
+Start with **Copie** — it adds and updates, and never deletes anything at the
+destination. Run the **simulation** first: it lists exactly what would be
+transferred, without writing.
+
+Only move to **Miroir** once a few copies have run cleanly. Its first run will
+require a simulation anyway.
+
+## Configuration
+
+All persistent state lives under `/config` — the SQLite database, the rclone
+configuration, the logs and the applied filter sets.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CSM_CONFIG_DIR` | `/config` | Appdata root |
+| `CSM_PORT` | `3572` | Web interface port |
+| `CSM_ALLOWED_ROOTS` | `/mnt/user` | Comma-separated local roots no task may escape |
+| `CSM_HISTORY_RETENTION_DAYS` | `90` | Age past which a run is purged |
+| `CSM_HISTORY_KEEP_RUNS` | `200` | Runs kept per task regardless of age |
+| `CSM_QUARANTINE_RETENTION_DAYS` | `30` | Age past which a trash batch is purged |
+| `CSM_QUARANTINE_KEEP_RUNS` | `3` | Trash batches always kept, regardless of age |
+| `CSM_SCHEDULER_POLL_SECONDS` | `20` | Scheduler heartbeat |
+| `TZ` | — | Server timezone; schedule times refer to it |
+| `PUID` / `PGID` | `99` / `100` | Owner of written files (`nobody:users`) |
+| `UMASK` | `000` | Permissions of written files |
+
+## Features
+
+- **Directions** — Local → Cloud and Cloud → Local
+- **Modes** — Copy (never deletes) and Mirror (guarded, see above)
+- **Scheduling** — every N minutes, daily at a fixed time, or chosen weekdays.
+  No cron expression. Explicit catch-up policy after a server restart.
+- **Filters** — ordered include/exclude rules by path, extension, name pattern,
+  hidden files and size, with a preview tool that shows which rule decided
+- **Live progress** — current file, throughput, ETA, over SSE
+- **History** — per-run result, exit code, transferred and deleted files, rclone
+  version, with configurable retention
+- **Notifications** — Unraid's built-in API and a generic webhook
+- **Backup** — export and restore the configuration, credentials excluded by
+  design; restored tasks arrive paused
+- **Bidirectional** — deliberately **not** available until its destructive test
+  matrix is complete. Half-reliable, it would lose data.
+
+## Development
+
+Backend integration tests need the rclone binary. Drop it in `backend/.tools/`
+(git-ignored) or point `CSM_RCLONE_BINARY` at it; otherwise those tests are
+skipped rather than failed.
 
 ```bash
 cd backend
 python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"     # Linux/macOS : .venv/bin/python
-.venv/Scripts/python -m pytest
-CSM_CONFIG_DIR=./dev-appdata .venv/Scripts/python -m uvicorn csm.main:app --reload --port 3572
+.venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/python -m pytest
+CSM_CONFIG_DIR=./dev-appdata .venv/bin/python -m uvicorn csm.main:app --reload --port 3572
 ```
 
-### Frontend
+On Windows the virtualenv puts them in `.venv/Scripts/` instead of
+`.venv/bin/`.
 
 ```bash
 cd frontend
 npm install
-npm run dev        # http://localhost:5173, proxy /api vers le port 3572
-npm run build      # produit dist/, servi par l'API en production
-```
-
-### Image Docker
-
-```bash
-docker build -f docker/Dockerfile -t cloud-sync-manager:0.1.0 .
+npm run dev        # http://localhost:5173, proxies /api to port 3572
+npm run build      # tsc -b && vite build
 ```
 
 ```bash
-docker run -d --name cloud-sync-manager -p 3572:3572 -v /mnt/user/appdata/cloud-sync-manager:/config -v /mnt/user:/mnt/user -e PUID=99 -e PGID=100 -e UMASK=000 cloud-sync-manager:0.1.0
+docker build -f docker/Dockerfile -t cloud-sync-manager .
 ```
 
-## Configuration
+```
+backend/    FastAPI API, SQLite model, Alembic migrations, rclone adapter
+frontend/   React + TypeScript web interface (Vite)
+docker/     Multi-stage Dockerfile, PUID/PGID entrypoint
+unraid/     Community Applications template, repository profile, icon
+docs/       Specification, technical decisions, installation guide
+```
 
-Tout l'état persistant vit sous `/config` (appdata Unraid) : base SQLite,
-`rclone.conf` chiffré, journaux.
+The specification, the technical decision record and the installation guide
+are in French, under [`docs/`](docs/):
 
-| Variable | Défaut | Rôle |
-|---|---|---|
-| `CSM_CONFIG_DIR` | `/config` | Racine de l'appdata |
-| `CSM_PORT` | `3572` | Port de la WebUI |
-| `CSM_ALLOWED_ROOTS` | `/mnt/user` | Racines locales autorisées, séparées par des virgules |
-| `CSM_WEB_DIR` | `/app/web` | Build du frontend servi par l'API |
-| `CSM_HISTORY_RETENTION_DAYS` | `90` | Âge au-delà duquel une exécution est purgée |
-| `CSM_HISTORY_KEEP_RUNS` | `200` | Exécutions conservées par tâche, quel que soit leur âge |
-| `CSM_SCHEDULER_POLL_SECONDS` | `20` | Battement du planificateur |
-| `TZ` | — | Fuseau du serveur ; les heures de planification s'y réfèrent |
-| `CSM_QUARANTINE_RETENTION_DAYS` | `30` | Âge au-delà duquel une corbeille est purgée |
-| `CSM_QUARANTINE_KEEP_RUNS` | `3` | Corbeilles toujours conservées, quel que soit leur âge |
-| `PUID` / `PGID` | `99` / `100` | Identité des fichiers écrits (`nobody:users`) |
-| `UMASK` | `000` | Droits des fichiers écrits |
+- [Installation and usage guide](docs/Installation_Unraid.md)
+- [Specification](docs/Cloud_Sync_Manager_Cahier_des_charges.md)
+- [Technical decisions](docs/Propositions_Techniques_Unraid.md)
 
-## Sécurité
+## License
 
-- Aucun secret Cloud en base : ils vivent dans le `rclone.conf` chiffré.
-- Aucun secret en argument de commande — `argv` est lisible via `/proc`.
-- Filtre de redaction centralisé avant tout log, export ou diagnostic.
-- Interface protégeable par mot de passe (empreinte `scrypt` salée, session
-  signée, tentatives ralenties) — désactivée par défaut, signalée tant qu'elle
-  ne l'est pas.
-- Ni `--privileged`, ni accès au socket Docker.
-- Aucune suppression distante activée par défaut ; simulation obligatoire
-  avant la première exécution destructive.
-- Source vide ou inaccessible : la tâche échoue **sans propager de suppression**.
-- Au-delà du seuil configuré, la tâche passe « Bloquée » et attend une
-  validation explicite qui nomme le nombre exact de fichiers concernés.
-- Les suppressions sont des déplacements vers `.cloudsync-trash` : réversibles,
-  et purgées selon une rétention configurable pour ne pas remplir le share.
+**GPL-3.0-or-later** for the application ([`LICENSE`](LICENSE)) — a derived
+version must stay open, which protects the data-loss guards rather than letting
+anyone close them off.
 
-## Licence
+**MIT** for the Unraid template repository ([`unraid/LICENSE`](unraid/LICENSE)),
+which is only descriptive XML.
 
-**GPL-3.0-or-later** pour l'application ([`LICENSE`](LICENSE)) : une version
-dérivée doit rester ouverte, ce qui protège les garde-fous contre la perte de
-données plutôt que de laisser quiconque les refermer.
-
-**MIT** pour le dépôt de templates Unraid ([`unraid/LICENSE`](unraid/LICENSE)),
-qui n'est que du XML descriptif — aucune raison d'y mettre de la friction.
-
-Les deux sont approuvées OSI, comme l'exige Community Applications. rclone est
-sous MIT et n'est pas intégré au code : l'application le lance en
-sous-processus, il n'y a donc aucune question de compatibilité de licence.
+Both are OSI-approved, as Community Applications requires. rclone is MIT and is
+not linked into the code — the application runs it as a child process.
