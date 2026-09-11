@@ -1,8 +1,7 @@
 """DATA-004 / UPDATE-002 — les migrations doivent être vérifiables.
 
-Le §27.7 impose un test de migration à chaque révision. Pour la révision
-initiale, on vérifie l'aller (schéma complet), le retour (base vide) et
-l'aller-retour, afin que la 0002 ait déjà un socle sur lequel s'appuyer.
+Le §27.7 impose un test de migration à chaque révision : l'aller, le retour
+et l'aller-retour.
 """
 
 from __future__ import annotations
@@ -68,3 +67,40 @@ def test_tasks_defaults_are_non_destructive(tmp_path: Path) -> None:
     assert "'never'" in str(columns["delete_policy"]["default"])
     assert "1" in str(columns["quarantine_enabled"]["default"])
     assert "1" in str(columns["dry_run_required"]["default"])
+
+
+def _task_columns(db_path: Path) -> dict[str, dict]:
+    engine = create_engine(sqlite_url(db_path))
+    try:
+        return {c["name"]: c for c in inspect(engine).get_columns("tasks")}
+    finally:
+        engine.dispose()
+
+
+def test_0002_adds_the_bidirectional_settings(tmp_path: Path) -> None:
+    """SYNC-003 — les réglages du bidirectionnel tiennent dans une colonne."""
+    db_path = tmp_path / "csm.sqlite"
+    upgrade_to_head(sqlite_url(db_path))
+    assert "bisync_json" in _task_columns(db_path)
+
+
+def test_0002_can_be_rolled_back(tmp_path: Path) -> None:
+    """Une révision qu'on ne sait pas défaire n'est pas une révision."""
+    db_path = tmp_path / "csm.sqlite"
+    url = sqlite_url(db_path)
+    upgrade_to_head(url)
+    downgrade_to(url, "0001")
+
+    colonnes = _task_columns(db_path)
+    assert "bisync_json" not in colonnes
+    # Le reste de la table doit survivre au retour en arrière.
+    assert {"id", "name", "mode", "delete_policy"} <= set(colonnes)
+
+
+def test_0002_survives_a_roundtrip(tmp_path: Path) -> None:
+    db_path = tmp_path / "csm.sqlite"
+    url = sqlite_url(db_path)
+    upgrade_to_head(url)
+    downgrade_to(url, "0001")
+    upgrade_to_head(url)
+    assert "bisync_json" in _task_columns(db_path)

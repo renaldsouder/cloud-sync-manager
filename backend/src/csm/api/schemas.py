@@ -126,6 +126,10 @@ class TaskRunStart(BaseModel):
     #: dispense jamais du contrôle de source : une source démontée reste
     #: refusée, quoi que l'utilisateur confirme.
     confirm_deletions: bool = False
+    #: Ré-initialisation d'une tâche bidirectionnelle (§7.3). Elle fusionne
+    #: les deux côtés et ne part jamais d'elle-même : c'est une demande
+    #: explicite, distincte d'une exécution ordinaire.
+    resync: bool = False
 
 
 class TaskOut(BaseModel):

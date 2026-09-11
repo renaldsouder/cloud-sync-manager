@@ -138,6 +138,7 @@ def run_task(
             task_id,
             dry_run=payload.dry_run,
             confirm_deletions=payload.confirm_deletions,
+            resync=payload.resync,
         )
     except RunError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

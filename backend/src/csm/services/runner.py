@@ -22,7 +22,7 @@ import os
 import signal
 import subprocess
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,9 +32,14 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from csm.db.models import FilterSet, Remote, Task, TaskEvent, TaskRun, new_id
 from csm.rclone import events as rclone_events
+from csm.rclone.adapter import (
+    BISYNC_CHECK_FILENAME,
+    BISYNC_NEEDS_RESYNC,
+)
 from csm.rclone.adapter import RcloneAdapter, RcloneError
 from csm.rclone.events import RcloneEvent
 from csm.services import guards
+from csm.services.tasks import MODES
 from csm.services import notifications, settings_store
 from csm.services.filters import FilterError, compile_filters, parse_rules
 from csm.services.guards import DeletionPlan, GuardBlocked
@@ -54,12 +59,45 @@ TRUNCATION_NOTICE = "détail tronqué"
 SUPPORTED_MODES = frozenset({"copy", "mirror"})
 
 RUN_TO_TASK_STATUS = {
+    "needs_resync": "needs_resync",
     "success": "success",
     "warning": "warning",
     "error": "error",
     "interrupted": "ready",
     "blocked": "blocked",
 }
+
+
+#: Réglages par défaut du bidirectionnel. ``initialised`` est faux tant
+#: qu'une ré-initialisation explicite n'a pas établi la référence : bisync
+#: refuse de tourner sans elle, et c'est une protection, pas une gêne.
+BISYNC_DEFAULTS: dict[str, Any] = {
+    "initialised": False,
+    "initialised_at": None,
+    "resync_simulated": False,
+    "conflict_resolve": "none",
+    "conflict_loser": "num",
+    "check_access": False,
+}
+
+
+def bisync_settings(task: Task) -> dict[str, Any]:
+    """Réglages bidirectionnels d'une tâche, complétés par les défauts."""
+    stored: dict[str, Any] = {}
+    if task.bisync_json:
+        try:
+            loaded = json.loads(task.bisync_json)
+            if isinstance(loaded, dict):
+                stored = loaded
+        except json.JSONDecodeError:
+            logger.warning("réglages bisync illisibles sur « %s »", task.name)
+    return {**BISYNC_DEFAULTS, **stored}
+
+
+def store_bisync_settings(task: Task, **changes: Any) -> dict[str, Any]:
+    settings = {**bisync_settings(task), **changes}
+    task.bisync_json = json.dumps(settings)
+    return settings
 
 
 class RunError(RuntimeError):
@@ -81,10 +119,24 @@ class RunPlan:
     max_delete_percent: int | None = None
     quarantine: bool = True
 
+    # -- bidirectionnel (SYNC-003) ------------------------------------------
+    #: Répertoire des listings de bisync. Obligatoire pour ce mode : son
+    #: emplacement par défaut ne survit pas au conteneur.
+    workdir: str | None = None
+    #: Ré-initialisation. Jamais implicite (§7.3).
+    resync: bool = False
+    conflict_resolve: str = "none"
+    conflict_loser: str = "num"
+    check_access: bool = False
+
     @property
     def destructive(self) -> bool:
-        """Une simulation ne détruit rien, une Copie non plus (§7.1)."""
-        return self.operation == "sync" and not self.dry_run
+        """Une simulation ne détruit rien, une Copie non plus (§7.1).
+
+        Le bidirectionnel l'est toujours : il peut supprimer des deux côtés,
+        et une ré-initialisation fusionne les deux arborescences.
+        """
+        return self.operation in {"sync", "bisync"} and not self.dry_run
 
 
 @dataclass
@@ -94,6 +146,7 @@ class LiveRun:
     task_name: str
     dry_run: bool
     started_at: datetime
+    resync: bool = False
     process: subprocess.Popen[str] | None = None
     phase: str = "démarrage"
     status: str = "running"
@@ -163,10 +216,14 @@ class RunManager:
         quarantine_retention_days: int = 30,
         quarantine_keep_runs: int = 3,
         filters_dir: Path | None = None,
+        bisync_dir: Path | None = None,
+        bidirectional_enabled: bool = False,
     ) -> None:
         self._session_factory = session_factory
         self._adapter = adapter
         self._filters_dir = filters_dir
+        self._bisync_dir = bisync_dir
+        self._bidirectional_enabled = bidirectional_enabled
         self._retention_days = quarantine_retention_days
         self._keep_runs = quarantine_keep_runs
         self._runs: dict[str, LiveRun] = {}
@@ -205,8 +262,44 @@ class RunManager:
 
     # -- cycle de vie -------------------------------------------------------
 
+    def _bisync_arguments(self, plan: RunPlan) -> list[str]:
+        """Arguments d'une exécution bidirectionnelle.
+
+        La corbeille est demandée des deux côtés : en bidirectionnel, une
+        suppression peut frapper le local comme le distant, et n'en protéger
+        qu'un seul reviendrait à n'en protéger aucun.
+        """
+        assert plan.workdir is not None  # garanti par _workdir_for
+        backup1 = backup2 = None
+        if plan.destructive and plan.quarantine:
+            backup1 = guards.quarantine_directory(plan.source)
+            backup2 = guards.quarantine_directory(plan.destination)
+
+        return self._adapter.build_bisync_args(
+            plan.source,
+            plan.destination,
+            plan.workdir,
+            dry_run=plan.dry_run,
+            resync=plan.resync,
+            check_access=plan.check_access,
+            conflict_resolve=plan.conflict_resolve,
+            conflict_loser=plan.conflict_loser,
+            max_delete=plan.max_deletes,
+            backup_dir1=backup1,
+            backup_dir2=backup2,
+            filter_file=plan.filter_file,
+            transfers=plan.transfers,
+            checkers=plan.checkers,
+            bwlimit=plan.bwlimit,
+        )
+
     def start(
-        self, task_id: str, *, dry_run: bool, confirm_deletions: bool = False
+        self,
+        task_id: str,
+        *,
+        dry_run: bool,
+        confirm_deletions: bool = False,
+        resync: bool = False,
     ) -> str:
         if self.is_running(task_id):
             raise RunError("cette tâche est déjà en cours d'exécution")
@@ -216,9 +309,13 @@ class RunManager:
             task = session.get(Task, task_id)
             if task is None:
                 raise RunError("tâche introuvable")
-            if task.mode not in SUPPORTED_MODES:
+            self._check_mode(task)
+            if task.mode == "bisync":
+                self._check_bisync_protocol(task, dry_run=dry_run, resync=resync)
+            elif resync:
                 raise RunError(
-                    f"le mode « {task.mode} » n'est pas encore disponible"
+                    "la ré-initialisation ne concerne que les tâches "
+                    "bidirectionnelles"
                 )
             if not dry_run and requires_dry_run(task):
                 raise RunError(
@@ -232,8 +329,9 @@ class RunManager:
 
             source, destination = endpoints(task, remote)
             performance = _performance(task)
+            bisync = bisync_settings(task) if task.mode == "bisync" else {}
             plan = RunPlan(
-                operation="sync" if task.mode == "mirror" else "copy",
+                operation=_operation_of(task),
                 source=source,
                 destination=destination,
                 dry_run=dry_run,
@@ -245,6 +343,11 @@ class RunManager:
                 max_deletes=task.max_deletes,
                 max_delete_percent=task.max_delete_percent,
                 quarantine=task.quarantine_enabled,
+                workdir=self._workdir_for(task) if task.mode == "bisync" else None,
+                resync=resync,
+                conflict_resolve=bisync.get("conflict_resolve", "none"),
+                conflict_loser=bisync.get("conflict_loser", "num"),
+                check_access=bool(bisync.get("check_access", False)),
             )
 
             run = TaskRun(
@@ -264,6 +367,7 @@ class RunManager:
                 task_name=task.name,
                 dry_run=dry_run,
                 started_at=datetime.now(timezone.utc),
+                resync=resync,
             )
         finally:
             session.close()
@@ -363,7 +467,63 @@ class RunManager:
             session.close()
             self._forget(live.run_id)
 
+    # -- bidirectionnel -----------------------------------------------------
+
+    def _check_mode(self, task: Task) -> None:
+        if task.mode not in MODES:
+            raise RunError(f"mode inconnu : {task.mode}")
+        if task.mode == "bisync" and not self._bidirectional_enabled:
+            raise RunError(
+                "le mode bidirectionnel n'est pas encore disponible : sa "
+                "matrice de tests destructifs n'est pas complète"
+            )
+        if task.mode not in SUPPORTED_MODES and task.mode != "bisync":
+            raise RunError(f"le mode « {task.mode} » n'est pas encore disponible")
+
+    def _check_bisync_protocol(
+        self, task: Task, *, dry_run: bool, resync: bool
+    ) -> None:
+        """Protocole d'initialisation (§7.3, §8.1).
+
+        bisync ne sait rien comparer tant qu'une ré-initialisation n'a pas
+        établi la référence. Celle-ci fusionne les deux côtés : elle ne doit
+        jamais partir toute seule, et elle exige d'avoir été simulée d'abord.
+        """
+        settings = bisync_settings(task)
+        if resync:
+            if not dry_run and not settings.get("resync_simulated"):
+                raise RunError(
+                    "simulez la ré-initialisation avant de l'appliquer : elle "
+                    "fusionne les deux côtés et le détail de ce qu'elle ferait "
+                    "doit être lu d'abord"
+                )
+            return
+        if not settings.get("initialised"):
+            raise RunError(
+                "cette tâche bidirectionnelle n'a pas encore été initialisée : "
+                "lancez la ré-initialisation, qui établit la référence commune "
+                "aux deux côtés"
+            )
+
+    def _workdir_for(self, task: Task) -> str:
+        """Répertoire des listings, sous l'appdata.
+
+        Leur perte force une ré-initialisation, donc une fusion : ils doivent
+        survivre à la recréation du conteneur, pas vivre dans un cache.
+        """
+        if self._bisync_dir is None:
+            raise RunError(
+                "aucun répertoire de travail n'est configuré pour le "
+                "bidirectionnel"
+            )
+        workdir = Path(self._bisync_dir) / task.id
+        workdir.mkdir(parents=True, exist_ok=True)
+        return str(workdir)
+
     def _arguments(self, live: LiveRun, plan: RunPlan) -> list[str]:
+        if plan.operation == "bisync":
+            return self._bisync_arguments(plan)
+
         backup_dir: str | None = None
         extra: list[str] = []
 
@@ -411,22 +571,13 @@ class RunManager:
         return process
 
     def _simulate(self, live: LiveRun, plan: RunPlan) -> DeletionPlan:
-        """Mesure ce que ferait l'exécution réelle, sans rien écrire."""
-        arguments = self._adapter.build_transfer_args(
-            plan.operation,
-            plan.source,
-            plan.destination,
-            dry_run=True,
-            bwlimit=plan.bwlimit,
-            transfers=plan.transfers,
-            checkers=plan.checkers,
-            filter_file=plan.filter_file,
-            # La corbeille doit être exclue ici aussi : sans cela, la
-            # simulation compterait comme « à supprimer » tout ce qu'une
-            # exécution précédente y a déposé, et ferait franchir le seuil
-            # à une tâche qui n'a pourtant rien de dangereux.
-            extra=["--exclude", guards.QUARANTINE_EXCLUDE] if plan.quarantine else None,
-        )
+        """Mesure ce que ferait l'exécution réelle, sans rien écrire.
+
+        Les arguments sont construits par le même aiguillage que l'exécution :
+        mesurer avec une commande différente de celle qui agira ne prouverait
+        rien (§20.3).
+        """
+        arguments = self._simulation_arguments(plan)
         result = DeletionPlan()
         process = self._spawn(live, arguments)
         try:
@@ -451,6 +602,26 @@ class RunManager:
         # peut manquer le dernier relevé si le processus se termine vite.
         result.deletes = max(result.deletes, len(result.paths))
         return result
+
+    def _simulation_arguments(self, plan: RunPlan) -> list[str]:
+        if plan.operation == "bisync":
+            simulated = replace(plan, dry_run=True)
+            return self._bisync_arguments(simulated)
+        return self._adapter.build_transfer_args(
+            plan.operation,
+            plan.source,
+            plan.destination,
+            dry_run=True,
+            bwlimit=plan.bwlimit,
+            transfers=plan.transfers,
+            checkers=plan.checkers,
+            filter_file=plan.filter_file,
+            # La corbeille doit être exclue ici aussi : sans cela, la
+            # simulation compterait comme « à supprimer » tout ce qu'une
+            # exécution précédente y a déposé, et ferait franchir le seuil
+            # à une tâche qui n'a pourtant rien de dangereux.
+            extra=["--exclude", guards.QUARANTINE_EXCLUDE] if plan.quarantine else None,
+        )
 
     def _pump(self, live: LiveRun, session: Session, arguments: list[str]) -> int:
         buffer: list[TaskEvent] = []
@@ -670,6 +841,8 @@ class RunManager:
                 # destructive est consommée dès qu'elle a réussi.
                 if live.dry_run and status == "success":
                     task.dry_run_required = False
+                if task.mode == "bisync":
+                    _record_bisync_outcome(task, live, status)
 
 
 def mark_orphan_runs_interrupted(session_factory: sessionmaker[Session]) -> int:
@@ -720,15 +893,48 @@ def _terminate(process: subprocess.Popen[str], grace: float) -> bool:
     return True
 
 
+def _operation_of(task: Task) -> str:
+    return {"mirror": "sync", "bisync": "bisync"}.get(task.mode, "copy")
+
+
 def _final_status(live: LiveRun, exit_code: int | None) -> str:
     """§8.5 — après un arrêt forcé ou un plantage, jamais « Réussie »."""
     if live.cancelled:
         return "interrupted"
+    if exit_code == BISYNC_NEEDS_RESYNC:
+        # §27.10 — « erreur » cacherait la seule action qui débloque : bisync
+        # ne réclame pas un dépannage mais une ré-initialisation explicite.
+        return "needs_resync"
     if exit_code is None or exit_code != 0:
         return "error"
     if live.counters["errors"] or int(live.stats.get("errors", 0)):
         return "warning"
     return "success"
+
+
+def _record_bisync_outcome(task: Task, live: LiveRun, status: str) -> None:
+    """Tient l'état d'initialisation d'une tâche bidirectionnelle.
+
+    Une simulation de ré-initialisation réussie ouvre le droit de l'appliquer
+    (§8.1). Une ré-initialisation réelle réussie établit la référence. Le code
+    7 dit que les listings ne sont plus exploitables : la tâche redevient non
+    initialisée, faute de quoi l'interface proposerait une exécution que
+    bisync refuserait.
+    """
+    if status == "needs_resync":
+        store_bisync_settings(task, initialised=False, resync_simulated=False)
+        return
+    if status != "success" or not live.resync:
+        return
+    if live.dry_run:
+        store_bisync_settings(task, resync_simulated=True)
+    else:
+        store_bisync_settings(
+            task,
+            initialised=True,
+            initialised_at=datetime.now(timezone.utc).isoformat(),
+            resync_simulated=False,
+        )
 
 
 def _summary_json(live: LiveRun) -> str:
@@ -777,8 +983,19 @@ def _write_filter_file(session: Session, task: Task, directory: Path | None) -> 
     Le fichier est réécrit à chaque exécution et conservé : il documente
     exactement ce qui a été appliqué, ce dont le diagnostic a besoin (§14).
     """
+    # bisync n'accepte pas --exclude et empreinte le contenu de son fichier
+    # de filtres. Sans cette exclusion écrite ici, la corbeille d'un côté
+    # serait propagée vers l'autre comme un lot de fichiers neufs.
+    besoin_corbeille = task.mode == "bisync" and task.quarantine_enabled
+    exclusion = f"- {guards.QUARANTINE_EXCLUDE}"
+
     if not task.filter_set_id or directory is None:
-        return None
+        if not besoin_corbeille or directory is None:
+            return None
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{task.id}.filter"
+        path.write_text(f"{exclusion}\n", encoding="utf-8")
+        return str(path)
 
     filter_set = session.get(FilterSet, task.filter_set_id)
     if filter_set is None:
@@ -795,7 +1012,10 @@ def _write_filter_file(session: Session, task: Task, directory: Path | None) -> 
 
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{task.id}.filter"
-    path.write_text(compiled.as_text(), encoding="utf-8")
+    corps = compiled.as_text()
+    if besoin_corbeille:
+        corps = f"{exclusion}\n{corps}"
+    path.write_text(corps, encoding="utf-8")
     return str(path)
 
 

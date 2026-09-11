@@ -139,6 +139,10 @@ class Task(TimestampMixin, Base):
     )
     schedule_json: Mapped[str | None] = mapped_column(Text)
     bandwidth_json: Mapped[str | None] = mapped_column(Text)
+    #: Réglages du bidirectionnel (SYNC-003) : état d'initialisation et
+    #: politique de conflit. Une colonne JSON plutôt que quatre colonnes,
+    #: comme pour la planification et la bande passante.
+    bisync_json: Mapped[str | None] = mapped_column(Text)
 
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     #: État courant : Prête, Planifiée, En cours, En pause, Réussie,

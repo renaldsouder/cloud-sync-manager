@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     #: Build du frontend servi par l'API (un seul conteneur, un seul port).
     web_dir: Path = Path("/app/web")
 
+    #: Le bidirectionnel reste fermé tant que la matrice destructive du
+    #: §20.3 et les scénarios du §8.6 ne sont pas couverts. Le §21 impose de
+    #: le reporter plutôt que de le livrer avec un risque de perte de
+    #: données : ce drapeau est la forme concrète de cette promesse.
+    bidirectional_enabled: bool = False
+
     #: Chemin explicite du binaire rclone. Vide ⇒ recherche dans le ``PATH``,
     #: ce qui est le cas dans l'image. Utile en développement pour pointer une
     #: copie locale (``backend/.tools/rclone.exe``).

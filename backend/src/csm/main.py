@@ -109,6 +109,10 @@ def _build_run_manager(app: FastAPI, settings: Settings) -> RunManager | None:
         quarantine_retention_days=settings.quarantine_retention_days,
         quarantine_keep_runs=settings.quarantine_keep_runs,
         filters_dir=settings.config_dir / "filters",
+        # Les listings de bisync vivent dans l'appdata : les perdre force une
+        # ré-initialisation, donc une fusion des deux côtés.
+        bisync_dir=settings.config_dir / "bisync",
+        bidirectional_enabled=settings.bidirectional_enabled,
     )
 
 
