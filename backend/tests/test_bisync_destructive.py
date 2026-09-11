@@ -12,6 +12,7 @@ renvoyé. Une tâche « bloquée » qui aurait tout de même supprimé serait un
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -233,18 +234,37 @@ def test_the_simulation_matches_what_the_run_does(
 def test_a_stopped_run_is_never_reported_as_successful(
     ouvert: TestClient, tmp_path: Path, local_root: Path
 ) -> None:
+    """§8.5 — après un arrêt forcé, « Interrompue », jamais « Réussie ».
+
+    L'exécution est volontairement bridée : sans cela, elle se termine en
+    quelques centaines de millisecondes sur une machine rapide, l'arrêt
+    arrive après coup, et le test se contente de constater une réussite —
+    il passerait alors sans jamais avoir éprouvé ce qu'il prétend.
+    """
     local, cloud = local_root / "local", tmp_path / "cloud"
     task_id = make_bisync_task(ouvert, local, cloud)
-    peupler(local, 400)
+    peupler(local, 300, prefixe="gros")
+    for fichier in local.iterdir():
+        fichier.write_text("x" * 20_000, encoding="utf-8")
+
     wait(ouvert, run(ouvert, task_id, resync=True).json()["id"])
+    configure(ouvert, task_id, bandwidth_json=json.dumps({"limit": "8k"}))
 
     started = run(ouvert, task_id, dry_run=False, resync=True).json()
-    time.sleep(0.3)
-    ouvert.post(f"/api/runs/{started['id']}/stop")
+
+    # On attend que le transfert ait réellement commencé, plutôt que de
+    # parier sur un délai.
+    debut = time.monotonic()
+    while time.monotonic() - debut < 20:
+        if ouvert.get(f"/api/runs/{started['id']}").json()["status"] != "running":
+            break
+        arret = ouvert.post(f"/api/runs/{started['id']}/stop")
+        if arret.status_code < 400:
+            break
+        time.sleep(0.05)
 
     final = wait(ouvert, started["id"])
     assert final["status"] == "interrupted", final
-    assert final["status"] != "success"
 
 
 def test_a_crash_leaves_a_lock_that_startup_lifts(
