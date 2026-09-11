@@ -5,10 +5,12 @@ import { createTask, fetchRemotes, type Remote } from "./api";
 type Props = {
   onCreated: () => void;
   onCancel: () => void;
+  /** Le bidirectionnel n'est proposé que si le moteur l'accepte (§21). */
+  bidirectional?: boolean;
 };
 
 type Direction = "local_to_remote" | "remote_to_local";
-type Mode = "copy" | "mirror";
+type Mode = "copy" | "mirror" | "bisync";
 
 /**
  * Assistant de création d'une tâche (UI-002).
@@ -17,7 +19,11 @@ type Mode = "copy" | "mirror";
  * simple interrupteur, et les conséquences sont écrites en toutes lettres
  * avant validation.
  */
-export default function TaskWizard({ onCreated, onCancel }: Props) {
+export default function TaskWizard({
+  onCreated,
+  onCancel,
+  bidirectional = false,
+}: Props) {
   const [remotes, setRemotes] = useState<Remote[]>([]);
   const [name, setName] = useState("");
   const [remoteId, setRemoteId] = useState("");
@@ -173,6 +179,24 @@ export default function TaskWizard({ onCreated, onCancel }: Props) {
             </span>
           </span>
         </label>
+        {bidirectional && (
+          <label className="choice">
+            <input
+              type="radio"
+              name="mode"
+              checked={mode === "bisync"}
+              onChange={() => setMode("bisync")}
+            />
+            <span>
+              <strong>Bidirectionnel</strong>
+              <span className="field__help">
+                Les modifications circulent <strong>dans les deux sens</strong>. Demande
+                une initialisation explicite, qui fusionne les deux côtés, et conserve
+                les deux versions d'un fichier modifié de part et d'autre.
+              </span>
+            </span>
+          </label>
+        )}
       </fieldset>
 
       {mode === "mirror" && (

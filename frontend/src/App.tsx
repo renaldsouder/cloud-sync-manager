@@ -119,7 +119,7 @@ export default function App() {
       {tab === "bord" ? (
         <DashboardView />
       ) : tab === "taches" ? (
-        <TasksView />
+        <TasksView bidirectional={health?.features?.bidirectional ?? false} />
       ) : tab === "stockages" ? (
         <RemotesView />
       ) : tab === "parametres" ? (
@@ -156,9 +156,10 @@ export default function App() {
 
       <footer className="shell__footer">
         Copie et Miroir dans les deux sens, protections destructives, planification,
-        filtres, notifications et sauvegarde de configuration. Le bidirectionnel
-        attend la fin de ses tests destructifs : à moitié fiable, il perdrait des
-        données.
+        filtres, notifications et sauvegarde de configuration.{" "}
+        {health?.features?.bidirectional
+          ? "Le bidirectionnel demande une initialisation explicite avant sa première exécution."
+          : "Le bidirectionnel attend la fin de ses tests destructifs : à moitié fiable, il perdrait des données."}
       </footer>
     </main>
   );

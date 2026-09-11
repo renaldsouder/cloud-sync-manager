@@ -98,6 +98,12 @@ def _classify(
     if level in {"error", "critical"}:
         return ERROR
 
+    # bisync annonce son abandon en NOTICE, pas en ERROR. Sans ce cas, une
+    # exécution échouée n'affiche aucun motif — et le §27.10 interdit de
+    # réduire une erreur à « Échec ».
+    if message.lower().startswith("failed to "):
+        return ERROR
+
     lowered = message.lower()
 
     # Avec une quarantaine (``--backup-dir``), rclone ne supprime pas : il

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import BlockedRun from "./BlockedRun";
+import BisyncPanel from "./BisyncPanel";
 import RunDetail from "./RunDetail";
 import ScheduleEditor from "./ScheduleEditor";
 import TaskWizard from "./TaskWizard";
@@ -26,6 +27,7 @@ const STATUS_LABEL: Record<string, string> = {
   error: "Erreur",
   blocked: "Bloquée — validation nécessaire",
   interrupted: "Interrompue",
+  needs_resync: "Ré-initialisation nécessaire",
 };
 
 const DIRECTION_LABEL: Record<Task["direction"], string> = {
@@ -39,7 +41,11 @@ const MODE_LABEL: Record<Task["mode"], string> = {
   bisync: "Bidirectionnel",
 };
 
-export default function TasksView() {
+type Props = {
+  bidirectional?: boolean;
+};
+
+export default function TasksView({ bidirectional = false }: Props) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [live, setLive] = useState<Record<string, LiveRun>>({});
   const [runs, setRuns] = useState<Record<string, Run[]>>({});
@@ -104,6 +110,7 @@ export default function TasksView() {
   if (adding) {
     return (
       <TaskWizard
+        bidirectional={bidirectional}
         onCancel={() => setAdding(false)}
         onCreated={() => {
           setAdding(false);
@@ -186,6 +193,27 @@ export default function TasksView() {
               )}
 
               {running && <Progress run={running} />}
+
+              {task.mode === "bisync" && !running && (
+                <BisyncPanel
+                  taskId={task.id}
+                  taskName={task.name}
+                  busy={Boolean(running)}
+                  onSimulateResync={() =>
+                    void act(() => runTask(task.id, true, false, true))
+                  }
+                  onApplyResync={() => {
+                    if (
+                      window.confirm(
+                        `Fusionner les deux côtés de « ${task.name} » ? ` +
+                          "Ce qui n'existe que d'un bord sera copié vers l'autre.",
+                      )
+                    ) {
+                      void act(() => runTask(task.id, false, false, true));
+                    }
+                  }}
+                />
+              )}
 
               {!running && task.status === "blocked" && task.last_run_id && (
                 <BlockedRun

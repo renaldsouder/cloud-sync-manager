@@ -10,7 +10,32 @@ export type Health = {
   status: "ok" | "degraded";
   version: string;
   checks: Record<string, Check>;
+  /** Fonctions réellement ouvertes par le serveur. */
+  features?: { bidirectional?: boolean };
 };
+
+export type BisyncSettings = {
+  initialised: boolean;
+  initialised_at: string | null;
+  resync_simulated: boolean;
+  conflict_resolve: string;
+  conflict_loser: string;
+  check_access: boolean;
+};
+
+export const fetchBisync = (taskId: string, signal?: AbortSignal) =>
+  request<BisyncSettings>(`/api/tasks/${taskId}/bisync`, { signal });
+
+export const updateBisync = (taskId: string, changes: Partial<BisyncSettings>) =>
+  request<BisyncSettings>(`/api/tasks/${taskId}/bisync`, {
+    method: "PATCH",
+    body: JSON.stringify(changes),
+  });
+
+export const placeAccessMarkers = (taskId: string) =>
+  request<Record<string, string>>(`/api/tasks/${taskId}/bisync/markers`, {
+    method: "POST",
+  });
 
 export type ProviderOption = {
   name: string;
@@ -201,10 +226,19 @@ export const createTask = (body: {
 export const deleteTask = (id: string) =>
   request<void>(`/api/tasks/${id}`, { method: "DELETE" });
 
-export const runTask = (id: string, dryRun: boolean, confirmDeletions = false) =>
+export const runTask = (
+  id: string,
+  dryRun: boolean,
+  confirmDeletions = false,
+  resync = false,
+) =>
   request<Run>(`/api/tasks/${id}/run`, {
     method: "POST",
-    body: JSON.stringify({ dry_run: dryRun, confirm_deletions: confirmDeletions }),
+    body: JSON.stringify({
+      dry_run: dryRun,
+      confirm_deletions: confirmDeletions,
+      resync,
+    }),
   });
 
 export type TaskEvent = {

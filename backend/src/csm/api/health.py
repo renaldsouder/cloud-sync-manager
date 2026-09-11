@@ -46,4 +46,9 @@ def health(request: Request) -> dict[str, Any]:
         "status": "ok" if all(c["ok"] for c in checks.values()) else "degraded",
         "version": __version__,
         "checks": checks,
+        # L'interface ne doit pas proposer un mode que le moteur refusera :
+        # elle apprend ici ce qui est réellement ouvert (SYNC-003, §21).
+        "features": {
+            "bidirectional": bool(settings and settings.bidirectional_enabled)
+        },
     }

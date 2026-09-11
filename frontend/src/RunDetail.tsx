@@ -20,6 +20,7 @@ const KIND_LABEL: Record<string, string> = {
   delete: "Supprimés",
   skip_transfer: "Ignorés",
   skip_delete: "Suppressions évitées",
+  conflict: "Conflits",
   error: "Erreurs",
   warning: "Avertissements",
   other: "Autres",
@@ -29,6 +30,7 @@ const KIND_LABEL: Record<string, string> = {
 const KIND_ORDER = [
   "transfer",
   "delete",
+  "conflict",
   "error",
   "skip_transfer",
   "skip_delete",
