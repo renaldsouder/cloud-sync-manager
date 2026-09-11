@@ -25,6 +25,28 @@ from csm.rclone.probe import RcloneInfo, rclone_binary
 
 DEFAULT_TIMEOUT = 30.0
 
+
+#: Code de sortie par lequel bisync signale des listings absents ou
+#: inutilisables. Ce n'est pas une panne mais une demande de
+#: ré-initialisation : le confondre avec une erreur générique priverait
+#: l'utilisateur de la seule action qui débloque la situation (§27.10).
+BISYNC_NEEDS_RESYNC = 7
+
+#: Nom des fichiers témoins que ``--check-access`` attend des deux côtés.
+BISYNC_CHECK_FILENAME = "RCLONE_TEST"
+
+#: Arbitrages acceptés. ``none`` conserve les deux versions au lieu d'en
+#: élire une : aucune donnée n'est perdue, mais le nom d'origine disparaît
+#: au profit des deux copies suffixées — ce que l'interface doit annoncer.
+BISYNC_CONFLICT_RESOLVE = frozenset(
+    {"none", "path1", "path2", "newer", "older", "larger", "smaller"}
+)
+
+#: Sort réservé à la version perdante. ``delete`` la détruit : il n'est
+#: accepté ici que parce que le §8 impose de l'exposer explicitement,
+#: jamais par défaut.
+BISYNC_CONFLICT_LOSER = frozenset({"num", "pathname", "delete"})
+
 #: Catalogue des fournisseurs, mémorisé par chemin de binaire.
 _PROVIDER_CACHE: dict[str, list[dict[str, Any]]] = {}
 
@@ -258,6 +280,104 @@ class RcloneAdapter:
             # de longueur de ligne de commande, et le jeu de règles reste
             # inspectable après coup pour le diagnostic (§14).
             arguments += ["--filter-from", filter_file]
+        arguments += extra or []
+        return arguments
+
+    def build_bisync_args(
+        self,
+        path1: str,
+        path2: str,
+        workdir: str,
+        *,
+        dry_run: bool = False,
+        resync: bool = False,
+        check_access: bool = False,
+        conflict_resolve: str = "none",
+        conflict_loser: str = "num",
+        conflict_suffix: str = "conflict",
+        max_delete: int | None = None,
+        backup_dir1: str | None = None,
+        backup_dir2: str | None = None,
+        filter_file: str | None = None,
+        transfers: int | None = None,
+        checkers: int | None = None,
+        bwlimit: str | None = None,
+        extra: list[str] | None = None,
+    ) -> list[str]:
+        """Construit la ligne de commande d'une synchronisation bidirectionnelle.
+
+        Fonction pure, comme ``build_transfer_args`` : le §20.3 exige qu'une
+        simulation corresponde exactement à l'exécution réelle, et c'est
+        vérifiable ici — les deux listes ne diffèrent que par ``--dry-run``.
+
+        Plusieurs choix sont imposés par le comportement mesuré de rclone
+        1.75.1, pas par préférence :
+
+        ``workdir`` est **obligatoire**. bisync y range les listings de
+        l'exécution précédente, sans lesquels il refuse de tourner et exige
+        une ré-initialisation. Son emplacement par défaut est un cache
+        utilisateur, qui disparaît avec le conteneur : le laisser là
+        transformerait chaque recréation de conteneur en ``--resync`` forcé.
+
+        ``--color NEVER`` n'est pas cosmétique. bisync colore sa sortie même
+        lorsqu'elle est redirigée, y compris à l'intérieur du journal JSON :
+        sans cela, des séquences d'échappement se retrouveraient enregistrées
+        dans les chemins de fichiers de l'historique.
+
+        Les options de sauvegarde s'appellent ``--backup-dir1`` et
+        ``--backup-dir2`` — une par côté — et le fichier de filtres
+        ``--filters-file``, là où les transferts unidirectionnels utilisent
+        ``--backup-dir`` et ``--filter-from``.
+        """
+        if not workdir:
+            raise ValueError("bisync exige un répertoire de travail persistant")
+        if conflict_resolve not in BISYNC_CONFLICT_RESOLVE:
+            raise ValueError(f"arbitrage de conflit inconnu : {conflict_resolve}")
+        if conflict_loser not in BISYNC_CONFLICT_LOSER:
+            raise ValueError(f"sort du perdant inconnu : {conflict_loser}")
+
+        arguments = [
+            "bisync",
+            path1,
+            path2,
+            "--workdir",
+            workdir,
+            "--color",
+            "NEVER",
+            "--use-json-log",
+            "--log-level",
+            "INFO",
+            "--stats",
+            "1s",
+            "--stats-log-level",
+            "NOTICE",
+            "--conflict-resolve",
+            conflict_resolve,
+            "--conflict-loser",
+            conflict_loser,
+            "--conflict-suffix",
+            conflict_suffix,
+        ]
+        if resync:
+            arguments.append("--resync")
+        if dry_run:
+            arguments.append("--dry-run")
+        if check_access:
+            arguments += ["--check-access", "--check-filename", BISYNC_CHECK_FILENAME]
+        if max_delete is not None:
+            arguments += ["--max-delete", str(max_delete)]
+        if backup_dir1:
+            arguments += ["--backup-dir1", backup_dir1]
+        if backup_dir2:
+            arguments += ["--backup-dir2", backup_dir2]
+        if filter_file:
+            arguments += ["--filters-file", filter_file]
+        if transfers:
+            arguments += ["--transfers", str(transfers)]
+        if checkers:
+            arguments += ["--checkers", str(checkers)]
+        if bwlimit:
+            arguments += ["--bwlimit", bwlimit]
         arguments += extra or []
         return arguments
 
