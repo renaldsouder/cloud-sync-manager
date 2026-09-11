@@ -403,6 +403,15 @@ class RcloneAdapter:
         except FileNotFoundError as exc:
             raise RcloneUnavailable(f"binaire rclone introuvable : {self.binary}") from exc
 
+    def touch(self, path: str, timeout: float = DEFAULT_TIMEOUT) -> None:
+        """Crée un fichier vide s'il n'existe pas (§8.6).
+
+        Sert à poser les témoins de ``--check-access`` des deux côtés. Sans
+        eux, bisync refuse de démarrer — ce qui est le comportement voulu :
+        un côté monté mais vide ne doit pas passer pour un côté accessible.
+        """
+        self._run_checked(["touch", path], timeout=timeout)
+
     def purge(self, path: str, timeout: float = DEFAULT_TIMEOUT) -> None:
         """Supprime récursivement un dossier.
 

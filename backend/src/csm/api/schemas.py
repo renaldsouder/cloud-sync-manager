@@ -132,6 +132,27 @@ class TaskRunStart(BaseModel):
     resync: bool = False
 
 
+class BisyncSettingsIn(BaseModel):
+    """Réglages du bidirectionnel (SYNC-003).
+
+    ``conflict_loser = "delete"`` détruit la version perdante : le §8 impose
+    de l'exposer explicitement, jamais de l'appliquer par défaut.
+    """
+
+    conflict_resolve: str | None = None
+    conflict_loser: str | None = None
+    check_access: bool | None = None
+
+
+class BisyncSettingsOut(BaseModel):
+    initialised: bool = False
+    initialised_at: str | None = None
+    resync_simulated: bool = False
+    conflict_resolve: str = "none"
+    conflict_loser: str = "num"
+    check_access: bool = False
+
+
 class TaskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

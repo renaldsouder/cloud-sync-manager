@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from csm.api.deps import get_session, get_settings_dep
 from csm.api.schemas import (
+    BisyncSettingsIn,
+    BisyncSettingsOut,
     RunOut,
     TaskCreate,
     TaskEventOut,
@@ -24,6 +26,8 @@ from csm.api.schemas import (
 from csm.config import Settings
 from csm.db.models import Task, TaskEvent, TaskRun
 from csm.services import tasks as service
+from csm.rclone.adapter import BISYNC_CONFLICT_LOSER, BISYNC_CONFLICT_RESOLVE
+from csm.services import runner as runner_service
 from csm.services.runner import TRUNCATION_NOTICE, RunError, RunManager
 
 router = APIRouter(tags=["tâches"])
@@ -148,6 +152,64 @@ def run_task(
     if run is None:  # pragma: no cover - la transaction du runner a échoué
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "exécution non créée")
     return RunOut.build(run, live=runner.get(run_id))
+
+
+@router.get("/tasks/{task_id}/bisync", response_model=BisyncSettingsOut)
+def read_bisync(
+    task_id: str, session: Session = Depends(get_session)
+) -> BisyncSettingsOut:
+    task = session.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "tâche introuvable")
+    return BisyncSettingsOut(**runner_service.bisync_settings(task))
+
+
+@router.patch("/tasks/{task_id}/bisync", response_model=BisyncSettingsOut)
+def update_bisync(
+    task_id: str,
+    payload: BisyncSettingsIn,
+    session: Session = Depends(get_session),
+) -> BisyncSettingsOut:
+    """Change la politique de conflit d'une tâche bidirectionnelle.
+
+    L'état d'initialisation n'est pas modifiable ici : il se gagne par une
+    ré-initialisation réelle, pas par une déclaration (§7.3).
+    """
+    task = session.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "tâche introuvable")
+    if task.mode != "bisync":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "ces réglages ne concernent que les tâches bidirectionnelles",
+        )
+
+    changes = payload.model_dump(exclude_none=True)
+    if changes.get("conflict_resolve") not in (None, *BISYNC_CONFLICT_RESOLVE):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"arbitrage de conflit inconnu : {changes['conflict_resolve']}",
+        )
+    if changes.get("conflict_loser") not in (None, *BISYNC_CONFLICT_LOSER):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"sort du perdant inconnu : {changes['conflict_loser']}",
+        )
+
+    updated = runner_service.store_bisync_settings(task, **changes)
+    session.commit()
+    return BisyncSettingsOut(**updated)
+
+
+@router.post("/tasks/{task_id}/bisync/markers")
+def place_markers(
+    task_id: str, runner: RunManager = Depends(get_runner)
+) -> dict[str, str]:
+    """Dépose les témoins de --check-access des deux côtés (§8.6)."""
+    try:
+        return runner.place_access_markers(task_id)
+    except RunError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
 @router.post("/runs/{run_id}/stop", response_model=RunOut)

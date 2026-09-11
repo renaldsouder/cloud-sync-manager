@@ -154,7 +154,12 @@ class LiveRun:
     current_file: str | None = None
     stats: dict[str, Any] = field(default_factory=dict)
     counters: dict[str, int] = field(
-        default_factory=lambda: {"transfers": 0, "deletes": 0, "errors": 0}
+        default_factory=lambda: {
+            "transfers": 0,
+            "deletes": 0,
+            "errors": 0,
+            "conflicts": 0,
+        }
     )
     last_error: str | None = None
     blocked_reason: str | None = None
@@ -505,6 +510,44 @@ class RunManager:
                 "aux deux côtés"
             )
 
+    def place_access_markers(self, task_id: str) -> dict[str, str]:
+        """Dépose les témoins de ``--check-access`` des deux côtés (§8.6).
+
+        La vérification d'accès ne vaut que si les deux témoins existent
+        vraiment. Les poser est une action explicite : les créer en douce au
+        premier lancement viderait le garde-fou de son sens, puisqu'un côté
+        inaccessible se verrait doter d'un témoin dès qu'il redeviendrait
+        accessible.
+        """
+        session = self._session_factory()
+        try:
+            task = session.get(Task, task_id)
+            if task is None:
+                raise RunError("tâche introuvable")
+            if task.mode != "bisync":
+                raise RunError(
+                    "les témoins d'accès ne concernent que les tâches "
+                    "bidirectionnelles"
+                )
+            remote = session.get(Remote, task.remote_id)
+            if remote is None:
+                raise RunError("le stockage associé à cette tâche a disparu")
+            source, destination = endpoints(task, remote)
+        finally:
+            session.close()
+
+        poses: dict[str, str] = {}
+        for label, racine in (("path1", source), ("path2", destination)):
+            cible = f"{racine.rstrip('/')}/{BISYNC_CHECK_FILENAME}"
+            try:
+                self._adapter.touch(cible)
+            except RcloneError as exc:
+                raise RunError(
+                    f"témoin impossible à déposer côté {label} : {exc}"
+                ) from exc
+            poses[label] = cible
+        return poses
+
     def _workdir_for(self, task: Task) -> str:
         """Répertoire des listings, sous l'appdata.
 
@@ -664,6 +707,11 @@ class RunManager:
             live.current_file = event.path
         elif event.kind in rclone_events.DESTRUCTIVE_KINDS:
             live.counters["deletes"] += 1
+        elif event.kind == rclone_events.CONFLICT:
+            # Rien n'est perdu, mais le nom d'origine a disparu au profit des
+            # deux copies suffixées : c'est un événement à conserver, pas un
+            # détail mécanique.
+            live.counters["conflicts"] += 1
         elif event.kind == rclone_events.ERROR:
             live.counters["errors"] += 1
             live.last_error = event.message

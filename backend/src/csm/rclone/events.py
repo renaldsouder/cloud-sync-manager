@@ -23,6 +23,11 @@ TRANSFER = "transfer"
 DELETE = "delete"
 SKIP_TRANSFER = "skip_transfer"
 SKIP_DELETE = "skip_delete"
+#: Les deux versions d'un fichier modifié des deux côtés ont été conservées
+#: sous des noms suffixés (§7.3). Rien n'est perdu, mais le nom d'origine
+#: disparaît : l'utilisateur doit le voir, sans quoi il croira le fichier
+#: volatilisé.
+CONFLICT = "conflict"
 ERROR = "error"
 STATS = "stats"
 OTHER = "other"
@@ -41,11 +46,17 @@ class RcloneEvent:
     stats: dict[str, Any] | None = None
 
 
-def parse_line(line: str) -> RcloneEvent | None:
+def parse_line(line: str, *, conflict_suffix: str = "conflict") -> RcloneEvent | None:
     """Transforme une ligne de journal en événement, ou ``None`` si illisible.
 
     Une ligne non JSON n'est jamais fatale : rclone peut écrire du texte
     avant que la journalisation structurée ne soit installée.
+
+    ``conflict_suffix`` est celui passé à bisync : c'est lui qui permet de
+    distinguer le renommage d'une version en conflit d'un déplacement
+    ordinaire. bisync annonce aussi « Renaming Path1 copy », mais le chemin
+    qu'il y affiche est amputé de son extension — la ligne « Moved » porte
+    le nom exact.
     """
     stripped = line.strip()
     if not stripped or not stripped.startswith("{"):
@@ -63,7 +74,7 @@ def parse_line(line: str) -> RcloneEvent | None:
     size = payload.get("size")
 
     return RcloneEvent(
-        kind=_classify(payload, level, message),
+        kind=_classify(payload, level, message, conflict_suffix),
         level=level,
         message=message,
         path=str(path) if path else None,
@@ -72,7 +83,9 @@ def parse_line(line: str) -> RcloneEvent | None:
     )
 
 
-def _classify(payload: dict[str, Any], level: str, message: str) -> str:
+def _classify(
+    payload: dict[str, Any], level: str, message: str, conflict_suffix: str
+) -> str:
     if isinstance(payload.get("stats"), dict):
         return STATS
 
@@ -92,6 +105,8 @@ def _classify(payload: dict[str, Any], level: str, message: str) -> str:
     # suppression ne serait tracée dès que la corbeille est active (§8.4).
     if lowered.startswith("moved into backup dir"):
         return DELETE
+    if lowered.startswith("moved") and f".{conflict_suffix.lower()}" in lowered:
+        return CONFLICT
     if lowered.startswith("moved"):
         # Moitié mécanique du déplacement : la ligne ci-dessus porte déjà le
         # sens, la compter aussi ferait un doublon.
