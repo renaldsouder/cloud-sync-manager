@@ -44,6 +44,13 @@ class DeletionPlan:
     checks: int = 0
     transfers: int = 0
     paths: list[str] = field(default_factory=list)
+    #: La simulation s'est-elle interrompue avant d'avoir tout examiné ?
+    #: Une mesure avortée ne vaut pas une mesure à zéro (§8.2).
+    aborted: bool = False
+    #: Code de sortie de la simulation. Toutes les interruptions ne se
+    #: valent pas : bisync distingue « trop de changements » d'une demande
+    #: de ré-initialisation, et l'utilisateur n'a pas la même action à faire.
+    exit_code: int | None = None
 
     @property
     def percent(self) -> float:

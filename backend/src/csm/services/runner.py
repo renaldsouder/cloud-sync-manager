@@ -125,9 +125,20 @@ class RunPlan:
     workdir: str | None = None
     #: Ré-initialisation. Jamais implicite (§7.3).
     resync: bool = False
+    #: La référence bisync a-t-elle déjà été établie ?
+    initialised: bool = False
     conflict_resolve: str = "none"
     conflict_loser: str = "num"
     check_access: bool = False
+
+    @property
+    def first_initialisation(self) -> bool:
+        """Toute première mise en place de la référence.
+
+        C'est le seul moment où un côté vide est normal : on relie deux
+        arborescences dont l'une peut n'avoir jamais rien contenu.
+        """
+        return self.resync and not self.initialised
 
     @property
     def destructive(self) -> bool:
@@ -267,7 +278,9 @@ class RunManager:
 
     # -- cycle de vie -------------------------------------------------------
 
-    def _bisync_arguments(self, plan: RunPlan) -> list[str]:
+    def _bisync_arguments(
+        self, plan: RunPlan, *, extra: list[str] | None = None
+    ) -> list[str]:
         """Arguments d'une exécution bidirectionnelle.
 
         La corbeille est demandée des deux côtés : en bidirectionnel, une
@@ -275,6 +288,11 @@ class RunManager:
         qu'un seul reviendrait à n'en protéger aucun.
         """
         assert plan.workdir is not None  # garanti par _workdir_for
+        if extra and not plan.dry_run:
+            raise RunError(
+                "aucune option de contournement ne doit atteindre une "
+                "exécution réelle"
+            )
         backup1 = backup2 = None
         if plan.destructive and plan.quarantine:
             backup1 = guards.quarantine_directory(plan.source)
@@ -296,6 +314,7 @@ class RunManager:
             transfers=plan.transfers,
             checkers=plan.checkers,
             bwlimit=plan.bwlimit,
+            extra=extra,
         )
 
     def start(
@@ -350,6 +369,7 @@ class RunManager:
                 quarantine=task.quarantine_enabled,
                 workdir=self._workdir_for(task) if task.mode == "bisync" else None,
                 resync=resync,
+                initialised=bool(bisync.get("initialised", False)),
                 conflict_resolve=bisync.get("conflict_resolve", "none"),
                 conflict_loser=bisync.get("conflict_loser", "num"),
                 check_access=bool(bisync.get("check_access", False)),
@@ -412,12 +432,24 @@ class RunManager:
     def _execute(self, live: LiveRun, plan: RunPlan) -> None:
         session = self._session_factory()
         try:
-            if plan.destructive:
+            # Un côté vide est anormal — sauf à la toute première mise en
+            # place de la référence, où l'on relie deux arborescences dont
+            # l'une peut légitimement être vide. Le §8.1 protège ce moment
+            # autrement : la simulation a été lue et confirmée.
+            if plan.destructive and not plan.first_initialisation:
                 live.phase = "contrôle de la source"
                 try:
                     guards.check_source_available(
                         self._adapter, plan.source, plan.destination
                     )
+                    if plan.operation == "bisync":
+                        # Les deux côtés propagent : un partage démonté est
+                        # aussi dangereux d'un bord que de l'autre, et le
+                        # contrôle à sens unique laisserait passer la moitié
+                        # des cas (§8.2, §8.6).
+                        guards.check_source_available(
+                            self._adapter, plan.destination, plan.source
+                        )
                 except GuardBlocked as exc:
                     self._finalise_blocked(live, session, str(exc))
                     session.commit()
@@ -436,6 +468,37 @@ class RunManager:
                 if live.cancelled:
                     self._finalise(live, None, session)
                     session.commit()
+                    return
+
+                if (
+                    plan.operation == "bisync"
+                    and deletion_plan.exit_code == BISYNC_NEEDS_RESYNC
+                ):
+                    # Les listings ont disparu. Conclure « trop de
+                    # changements » désignerait la mauvaise cause et la
+                    # mauvaise action : c'est une ré-initialisation qu'il
+                    # faut, pas une validation de seuil.
+                    self._finalise(live, BISYNC_NEEDS_RESYNC, session)
+                    session.commit()
+                    self._notify(live, live.status, live.last_error)
+                    return
+
+                if deletion_plan.aborted and plan.operation == "bisync":
+                    # bisync refuse lui-même de planifier au-delà d'une part
+                    # trop grande de changements. La mesure n'a donc pas
+                    # abouti : la traiter comme « aucune suppression prévue »
+                    # ferait passer le seuil du §8.3 pour satisfait alors
+                    # qu'on ignore ce qui serait détruit.
+                    motif = (
+                        "la simulation de contrôle s'est interrompue : trop de "
+                        "changements pour que rclone établisse un plan. Rien "
+                        "n'a été modifié. Vérifiez les deux côtés, puis "
+                        "ré-initialisez si la situation est normale."
+                    )
+                    self._store_planned_deletions(live, session, deletion_plan)
+                    self._finalise_blocked(live, session, motif)
+                    session.commit()
+                    self._notify(live, 'blocked', motif)
                     return
 
                 reason = (
@@ -638,7 +701,8 @@ class RunManager:
                     elif event.kind == rclone_events.SKIP_DELETE and event.path:
                         if len(result.paths) < guards.MAX_LISTED_PATHS:
                             result.paths.append(event.path)
-            process.wait()
+            result.exit_code = process.wait()
+            result.aborted = result.exit_code != 0
         finally:
             live.process = None
         # Le décompte des chemins fait foi sur celui des statistiques, qui
@@ -648,8 +712,14 @@ class RunManager:
 
     def _simulation_arguments(self, plan: RunPlan) -> list[str]:
         if plan.operation == "bisync":
-            simulated = replace(plan, dry_run=True)
-            return self._bisync_arguments(simulated)
+            # La mesure doit être libre de compter jusqu'au bout. Lui
+            # transmettre notre propre seuil la ferait avorter à cause de la
+            # limite qu'elle sert précisément à évaluer, et ``--force`` lève
+            # en plus la garde interne de bisync — sans danger puisque rien
+            # n'est écrit en simulation. Le seuil du §8.3 est appliqué
+            # ensuite, sur un décompte complet.
+            simulated = replace(plan, dry_run=True, max_deletes=None)
+            return self._bisync_arguments(simulated, extra=["--force"])
         return self._adapter.build_transfer_args(
             plan.operation,
             plan.source,
@@ -893,7 +963,40 @@ class RunManager:
                     _record_bisync_outcome(task, live, status)
 
 
-def mark_orphan_runs_interrupted(session_factory: sessionmaker[Session]) -> int:
+def clear_stale_bisync_locks(task_ids: list[str], bisync_dir: Path | None) -> int:
+    """Lève les verrous laissés par une exécution tuée en vol (§8.5).
+
+    bisync pose un fichier ``.lck`` et refuse de démarrer tant qu'il existe.
+    Après un arrêt brutal du conteneur, ce verrou survit : la tâche est alors
+    bloquée pour toujours, et le seul remède documenté par rclone est de
+    supprimer le fichier à la main — ce que le §1.4 refuse d'imposer.
+
+    La levée n'a lieu qu'au démarrage, pour des exécutions dont on vient
+    d'établir qu'elles sont mortes. Un verrou n'est jamais forcé pendant qu'une
+    exécution tourne : le gestionnaire interdit déjà deux exécutions
+    concurrentes d'une même tâche.
+    """
+    if bisync_dir is None:
+        return 0
+    leves = 0
+    for task_id in task_ids:
+        workdir = Path(bisync_dir) / task_id
+        if not workdir.is_dir():
+            continue
+        for verrou in workdir.glob("*.lck"):
+            try:
+                verrou.unlink()
+                leves += 1
+            except OSError as exc:  # pragma: no cover - dépend du système
+                logger.warning("verrou bisync impossible à lever : %s", exc)
+    if leves:
+        logger.warning("%d verrou(x) bisync levé(s) après un arrêt brutal", leves)
+    return leves
+
+
+def mark_orphan_runs_interrupted(
+    session_factory: sessionmaker[Session], bisync_dir: Path | None = None
+) -> int:
     """Rattrape les exécutions coupées par un arrêt du conteneur (§8.5).
 
     Sans ce passage au démarrage, une exécution tuée en vol resterait
@@ -907,17 +1010,21 @@ def mark_orphan_runs_interrupted(session_factory: sessionmaker[Session]) -> int:
         orphans = list(
             session.scalars(select(TaskRun).where(TaskRun.status == "running")).all()
         )
+        bloquees: list[str] = []
         for run in orphans:
             run.status = "interrupted"
             run.ended_at = run.ended_at or datetime.now(timezone.utc)
             task = session.get(Task, run.task_id)
             if task is not None and task.status == "running":
                 task.status = "ready"
+            if task is not None and task.mode == "bisync":
+                bloquees.append(task.id)
         if orphans:
             logger.warning(
                 "%d exécution(s) interrompue(s) par un arrêt précédent", len(orphans)
             )
             session.commit()
+        clear_stale_bisync_locks(bloquees, bisync_dir)
         return len(orphans)
     finally:
         session.close()

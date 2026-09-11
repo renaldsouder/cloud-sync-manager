@@ -154,7 +154,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         app.state.login_throttle = csm_auth.LoginThrottle()
         app.state.session_factory = create_session_factory(engine)
-        mark_orphan_runs_interrupted(app.state.session_factory)
+        mark_orphan_runs_interrupted(
+            app.state.session_factory, settings.config_dir / "bisync"
+        )
         app.state.run_manager = _build_run_manager(app, settings)
         app.state.scheduler = _build_scheduler(app, settings)
         logger.info("Cloud Sync Manager %s prêt sur %s", __version__, settings.config_dir)
