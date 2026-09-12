@@ -95,6 +95,13 @@ def update_task(
     settings: Settings = Depends(get_settings_dep),
 ) -> TaskOut:
     task = _get_task(session, task_id)
+    if payload.mode is not None or payload.direction is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "le sens et le mode ne se modifient pas sur une tâche existante : "
+            "le §8.1 impose une nouvelle simulation après un tel changement. "
+            "Créez une nouvelle tâche.",
+        )
     try:
         service.update_task(
             session,
@@ -107,6 +114,9 @@ def update_task(
             enabled=payload.enabled,
             filter_set_id=payload.filter_set_id,
             bandwidth=payload.bandwidth,
+            max_deletes=payload.max_deletes,
+            max_delete_percent=payload.max_delete_percent,
+            quarantine_enabled=payload.quarantine_enabled,
         )
     except service.TaskError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

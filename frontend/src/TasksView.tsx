@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import BlockedRun from "./BlockedRun";
 import BisyncPanel from "./BisyncPanel";
 import RunDetail from "./RunDetail";
+import TaskEditor from "./TaskEditor";
 import ScheduleEditor from "./ScheduleEditor";
 import TaskWizard from "./TaskWizard";
 import {
@@ -54,6 +55,7 @@ export default function TasksView({ bidirectional = false }: Props) {
   const [planning, setPlanning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Task | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -105,6 +107,19 @@ export default function TasksView({ bidirectional = false }: Props) {
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
+  }
+
+  if (editing) {
+    return (
+      <TaskEditor
+        task={editing}
+        onCancel={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          void reload();
+        }}
+      />
+    );
   }
 
   if (adding) {
@@ -284,6 +299,15 @@ export default function TasksView({ bidirectional = false }: Props) {
                     onClick={() => setPlanning(planning === task.id ? null : task.id)}
                   >
                     {planning === task.id ? "Fermer" : "Planifier"}
+                  </button>
+                )}
+                {!running && (
+                  <button
+                    type="button"
+                    className="btn btn--small btn--ghost"
+                    onClick={() => setEditing(task)}
+                  >
+                    Modifier
                   </button>
                 )}
                 <button

@@ -184,6 +184,9 @@ def update_task(
     enabled: bool | None = None,
     filter_set_id: str | None = None,
     bandwidth: dict | None = None,
+    max_deletes: int | None = None,
+    max_delete_percent: int | None = None,
+    quarantine_enabled: bool | None = None,
     now: datetime | None = None,
 ) -> Task:
     if name and name != task.name:
@@ -221,6 +224,18 @@ def update_task(
 
     if bandwidth is not None:
         task.bandwidth_json = json.dumps(bandwidth) if bandwidth else None
+
+    if max_deletes is not None:
+        task.max_deletes = max_deletes
+    if max_delete_percent is not None:
+        task.max_delete_percent = max_delete_percent
+
+    if quarantine_enabled is not None and quarantine_enabled != task.quarantine_enabled:
+        task.quarantine_enabled = quarantine_enabled
+        # §8.1 — désactiver la corbeille rend les suppressions définitives :
+        # le changement mérite une simulation avant de s'appliquer.
+        if not quarantine_enabled:
+            task.dry_run_required = task.mode != "copy"
 
     if enabled is not None and enabled != task.enabled:
         task.enabled = enabled

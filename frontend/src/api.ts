@@ -173,6 +173,9 @@ export type Task = {
   mode: "copy" | "mirror" | "bisync";
   delete_policy: string;
   quarantine_enabled: boolean;
+  max_deletes: number | null;
+  max_delete_percent: number | null;
+  filter_set_id: string | null;
   dry_run_required: boolean;
   enabled: boolean;
   status: string;
@@ -349,10 +352,23 @@ export type Dashboard = {
 export const fetchDashboard = (signal?: AbortSignal) =>
   request<Dashboard>("/api/dashboard", { signal });
 
-export const updateTask = (
-  id: string,
-  patch: { schedule?: Schedule | null; enabled?: boolean; name?: string },
-) => request<Task>(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+export type TaskPatch = {
+  name?: string;
+  local_path?: string;
+  remote_path?: string;
+  schedule?: Schedule | null;
+  enabled?: boolean;
+  filter_set_id?: string | null;
+  max_deletes?: number;
+  max_delete_percent?: number;
+  quarantine_enabled?: boolean;
+};
+
+export const updateTask = (id: string, patch: TaskPatch) =>
+  request<Task>(`/api/tasks/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
 
 export function formatDate(value: string | null): string {
   if (!value) return "—";

@@ -110,6 +110,16 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
+    """Modification d'une tâche (TASK-001).
+
+    ``extra="forbid"`` n'est pas de la rigueur gratuite : sans lui, un champ
+    mal orthographié — ou volontairement absent de ce schéma, comme ``mode``
+    — était accepté avec un 200 puis ignoré, et l'appelant croyait sa
+    modification appliquée.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = Field(default=None, min_length=1, max_length=128)
     local_path: str | None = None
     remote_path: str | None = None
@@ -117,6 +127,16 @@ class TaskUpdate(BaseModel):
     enabled: bool | None = None
     filter_set_id: str | None = None
     bandwidth: dict[str, Any] | None = None
+    #: Seuils du §8.3. ``0`` désactive le critère correspondant.
+    max_deletes: int | None = Field(default=None, ge=0)
+    max_delete_percent: int | None = Field(default=None, ge=0, le=100)
+    #: Corbeille plutôt que suppression réelle (CONF-004).
+    quarantine_enabled: bool | None = None
+    #: Déclarés pour pouvoir être refusés avec une explication plutôt qu'avec
+    #: un « champ inattendu » : changer le sens ou le mode d'une tâche
+    #: existante contournerait la simulation exigée par le §8.1.
+    mode: str | None = None
+    direction: str | None = None
 
 
 class TaskRunStart(BaseModel):
@@ -165,6 +185,9 @@ class TaskOut(BaseModel):
     mode: str
     delete_policy: str
     quarantine_enabled: bool
+    #: Seuils du §8.3, affichés pour être modifiables (TASK-001).
+    max_deletes: int | None = None
+    max_delete_percent: int | None = None
     dry_run_required: bool
     enabled: bool
     status: str
@@ -189,6 +212,8 @@ class TaskOut(BaseModel):
             mode=task.mode,
             delete_policy=task.delete_policy,
             quarantine_enabled=task.quarantine_enabled,
+            max_deletes=task.max_deletes,
+            max_delete_percent=task.max_delete_percent,
             dry_run_required=task.dry_run_required,
             enabled=task.enabled,
             status=task.status,
