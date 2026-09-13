@@ -56,6 +56,7 @@ export default function TasksView({ bidirectional = false }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
+  const [duplicating, setDuplicating] = useState<Task | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -122,13 +123,18 @@ export default function TasksView({ bidirectional = false }: Props) {
     );
   }
 
-  if (adding) {
+  if (adding || duplicating) {
     return (
       <TaskWizard
         bidirectional={bidirectional}
-        onCancel={() => setAdding(false)}
+        template={duplicating}
+        onCancel={() => {
+          setAdding(false);
+          setDuplicating(null);
+        }}
         onCreated={() => {
           setAdding(false);
+          setDuplicating(null);
           void reload();
         }}
       />
@@ -308,6 +314,15 @@ export default function TasksView({ bidirectional = false }: Props) {
                     onClick={() => setEditing(task)}
                   >
                     Modifier
+                  </button>
+                )}
+                {!running && (
+                  <button
+                    type="button"
+                    className="btn btn--small btn--ghost"
+                    onClick={() => setDuplicating(task)}
+                  >
+                    Dupliquer
                   </button>
                 )}
                 <button

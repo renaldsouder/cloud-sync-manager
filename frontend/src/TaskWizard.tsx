@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 
-import { createTask, fetchRemotes, type Remote } from "./api";
+import { createTask, fetchRemotes, type Remote, type Task } from "./api";
 
 type Props = {
   onCreated: () => void;
   onCancel: () => void;
   /** Le bidirectionnel n'est proposé que si le moteur l'accepte (§21). */
   bidirectional?: boolean;
+  /**
+   * Tâche servant de modèle (TASK-003). Le formulaire arrive pré-rempli,
+   * mais reste un formulaire de création : rien n'est enregistré tant que
+   * l'utilisateur n'a pas validé, et le dossier local devra changer — deux
+   * tâches aux chemins imbriqués sont refusées.
+   */
+  template?: Task | null;
 };
 
 type Direction = "local_to_remote" | "remote_to_local";
@@ -23,14 +30,19 @@ export default function TaskWizard({
   onCreated,
   onCancel,
   bidirectional = false,
+  template = null,
 }: Props) {
   const [remotes, setRemotes] = useState<Remote[]>([]);
-  const [name, setName] = useState("");
-  const [remoteId, setRemoteId] = useState("");
-  const [localPath, setLocalPath] = useState("/mnt/user/");
-  const [remotePath, setRemotePath] = useState("");
-  const [direction, setDirection] = useState<Direction>("local_to_remote");
-  const [mode, setMode] = useState<Mode>("copy");
+  const [name, setName] = useState(template ? `${template.name} (copie)` : "");
+  const [remoteId, setRemoteId] = useState(template?.remote_id ?? "");
+  const [localPath, setLocalPath] = useState(
+    template?.local_path ?? "/mnt/user/",
+  );
+  const [remotePath, setRemotePath] = useState(template?.remote_path ?? "");
+  const [direction, setDirection] = useState<Direction>(
+    template?.direction ?? "local_to_remote",
+  );
+  const [mode, setMode] = useState<Mode>(template?.mode ?? "copy");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -39,7 +51,9 @@ export default function TaskWizard({
     fetchRemotes(controller.signal)
       .then((found) => {
         setRemotes(found);
-        if (found.length > 0) setRemoteId(found[0].id);
+        // Le stockage du modèle est déjà choisi : l'écraser reviendrait à
+        // défaire la duplication.
+        if (found.length > 0 && !template) setRemoteId(found[0].id);
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
@@ -97,6 +111,17 @@ export default function TaskWizard({
           Annuler
         </button>
       </div>
+
+      {template && (
+        <p className="notice">
+          <strong>Copie de «&nbsp;{template.name}&nbsp;»</strong>
+          <br />
+          Choisissez un <strong>autre dossier local</strong> : deux tâches dont
+          les dossiers se recoupent pourraient se renvoyer des suppressions
+          indéfiniment, et la création serait refusée. Rien n'est enregistré
+          tant que vous n'avez pas validé.
+        </p>
+      )}
 
       <label className="field">
         <span className="field__label">Nom de la tâche</span>
