@@ -136,6 +136,9 @@ def delete_task(
             status.HTTP_409_CONFLICT,
             "cette tâche est en cours d'exécution : arrêtez-la avant de la supprimer",
         )
+    settings = getattr(request.app.state, "settings", None)
+    if settings is not None:
+        service.forget_workspace(settings, task.id)
     session.delete(task)
 
 

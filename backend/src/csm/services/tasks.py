@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -71,6 +73,32 @@ def validate_local_path(
 
     _refuse_overlap(session, resolved, task_id)
     return resolved
+
+
+def forget_workspace(settings: Settings, task_id: str) -> list[str]:
+    """Efface les fichiers de travail qu'une tâche laissait derrière elle.
+
+    Sans ce ménage, supprimer une tâche abandonnait son jeu de filtres
+    matérialisé et, pour le bidirectionnel, ses listings — des répertoires
+    qui s'accumulaient dans l'appdata sans que rien ne les réclame jamais.
+
+    Ne touche que ce qui appartient à l'application. Les données de
+    l'utilisateur et la corbeille déposée à destination ne sont pas
+    concernées : supprimer une tâche n'est pas supprimer des fichiers.
+    """
+    efface: list[str] = []
+
+    filtre = settings.config_dir / "filters" / f"{task_id}.filter"
+    if filtre.is_file():
+        filtre.unlink()
+        efface.append(str(filtre))
+
+    workdir = settings.config_dir / "bisync" / task_id
+    if workdir.is_dir():
+        shutil.rmtree(workdir, ignore_errors=True)
+        efface.append(str(workdir))
+
+    return efface
 
 
 def _refuse_overlap(session: Session, resolved: Path, task_id: str | None) -> None:

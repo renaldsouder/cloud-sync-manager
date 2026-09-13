@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import BlockedRun from "./BlockedRun";
 import BisyncPanel from "./BisyncPanel";
+import DeleteTask from "./DeleteTask";
 import RunDetail from "./RunDetail";
 import TaskEditor from "./TaskEditor";
 import ScheduleEditor from "./ScheduleEditor";
@@ -57,6 +58,7 @@ export default function TasksView({ bidirectional = false }: Props) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
   const [duplicating, setDuplicating] = useState<Task | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -215,6 +217,18 @@ export default function TasksView({ bidirectional = false }: Props) {
 
               {running && <Progress run={running} />}
 
+              {deleting === task.id && (
+                <DeleteTask
+                  task={task}
+                  busy={false}
+                  onCancel={() => setDeleting(null)}
+                  onConfirm={() => {
+                    setDeleting(null);
+                    void act(() => deleteTask(task.id));
+                  }}
+                />
+              )}
+
               {task.mode === "bisync" && !running && (
                 <BisyncPanel
                   taskId={task.id}
@@ -337,9 +351,18 @@ export default function TasksView({ bidirectional = false }: Props) {
                     type="button"
                     className="btn btn--small btn--ghost"
                     onClick={() => {
-                      if (window.confirm(`Supprimer la tâche « ${task.name} » ?`)) {
-                        void act(() => deleteTask(task.id));
+                      if (task.mode === "copy") {
+                        // Une Copie ne supprime rien à distance : exiger la
+                        // confirmation renforcée partout la banaliserait là
+                        // où elle compte (§10.4).
+                        if (
+                          window.confirm(`Supprimer la tâche « ${task.name} » ?`)
+                        ) {
+                          void act(() => deleteTask(task.id));
+                        }
+                        return;
                       }
+                      setDeleting(deleting === task.id ? null : task.id);
                     }}
                   >
                     Supprimer
