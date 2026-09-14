@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import LocalPicker from "./LocalPicker";
+import RemotePicker from "./RemotePicker";
 import { createTask, fetchRemotes, type Remote, type Task } from "./api";
 
 type Props = {
@@ -45,6 +46,7 @@ export default function TaskWizard({
   );
   const [mode, setMode] = useState<Mode>(template?.mode ?? "copy");
   const [parcourt, setParcourt] = useState(false);
+  const [parcourtDistant, setParcourtDistant] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -283,7 +285,32 @@ export default function TaskWizard({
           placeholder="Sauvegardes/Photos"
         />
         <span className="field__help">Laisser vide pour la racine du stockage.</span>
+        {remoteId && (
+          <span className="actions">
+            <button
+              type="button"
+              className="btn btn--small btn--ghost"
+              onClick={() => setParcourtDistant((ouvert) => !ouvert)}
+            >
+              {parcourtDistant
+                ? "Fermer l'explorateur"
+                : "Parcourir le stockage distant…"}
+            </button>
+          </span>
+        )}
       </label>
+
+      {parcourtDistant && remoteId && (
+        <RemotePicker
+          remoteId={remoteId}
+          valeur={remotePath}
+          onFermer={() => setParcourtDistant(false)}
+          onChoisir={(chemin) => {
+            setRemotePath(chemin);
+            setParcourtDistant(false);
+          }}
+        />
+      )}
 
       {error && <p className="state state--error">{error}</p>}
 

@@ -126,6 +126,27 @@ export type Listing = {
   truncated: boolean;
 };
 
+export type RemoteListing = {
+  path: string;
+  parent: string | null;
+  entries: { name: string; path: string }[];
+  truncated: boolean;
+};
+
+export const browseRemote = (
+  remoteId: string,
+  path?: string,
+  signal?: AbortSignal,
+) => {
+  const params = new URLSearchParams();
+  if (path) params.set("path", path);
+  const suffix = params.toString();
+  return request<RemoteListing>(
+    `/api/remotes/${remoteId}/browse${suffix ? `?${suffix}` : ""}`,
+    { signal },
+  );
+};
+
 export const browseLocal = (path?: string, signal?: AbortSignal) => {
   const params = new URLSearchParams();
   if (path) params.set("path", path);

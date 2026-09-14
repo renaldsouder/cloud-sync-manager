@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import LocalPicker from "./LocalPicker";
+import RemotePicker from "./RemotePicker";
 import {
   fetchFilterSets,
   updateTask,
@@ -47,6 +48,7 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
 
   const [filterSets, setFilterSets] = useState<FilterSet[]>([]);
   const [parcourt, setParcourt] = useState(false);
+  const [parcourtDistant, setParcourtDistant] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -133,7 +135,30 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
           placeholder="laisser vide pour la racine"
           onChange={(event) => setRemotePath(event.target.value)}
         />
+        <span className="actions">
+          <button
+            type="button"
+            className="btn btn--small btn--ghost"
+            onClick={() => setParcourtDistant((ouvert) => !ouvert)}
+          >
+            {parcourtDistant
+              ? "Fermer l'explorateur"
+              : "Parcourir le stockage distant…"}
+          </button>
+        </span>
       </label>
+
+      {parcourtDistant && (
+        <RemotePicker
+          remoteId={task.remote_id}
+          valeur={remotePath}
+          onFermer={() => setParcourtDistant(false)}
+          onChoisir={(chemin) => {
+            setRemotePath(chemin);
+            setParcourtDistant(false);
+          }}
+        />
+      )}
 
       <div className="field">
         <span className="field__label">Sens et mode</span>
