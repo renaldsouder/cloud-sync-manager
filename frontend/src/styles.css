@@ -471,6 +471,45 @@ body {
   color: var(--ink);
 }
 
+.dossiers {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+
+.dossiers__ligne {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 2px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dossiers__ligne:disabled {
+  color: var(--ink-soft);
+  cursor: not-allowed;
+}
+
+.dossiers__ligne:hover:not(:disabled) .dossiers__nom {
+  color: var(--accent);
+}
+
+.dossiers__nom::before {
+  content: "📁";
+  margin-right: 8px;
+}
+
 .etapes {
   list-style: none;
   margin: 16px 0;

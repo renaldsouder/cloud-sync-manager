@@ -111,6 +111,30 @@ export type Onboarding = {
   completed: boolean;
 };
 
+export type BrowseEntry = {
+  name: string;
+  path: string;
+  writable: boolean;
+  forbidden_destination: boolean;
+};
+
+export type Listing = {
+  path: string;
+  parent: string | null;
+  roots: string[];
+  entries: BrowseEntry[];
+  truncated: boolean;
+};
+
+export const browseLocal = (path?: string, signal?: AbortSignal) => {
+  const params = new URLSearchParams();
+  if (path) params.set("path", path);
+  const suffix = params.toString();
+  return request<Listing>(`/api/local/browse${suffix ? `?${suffix}` : ""}`, {
+    signal,
+  });
+};
+
 export const fetchOnboarding = (signal?: AbortSignal) =>
   request<Onboarding>("/api/onboarding", { signal });
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import LocalPicker from "./LocalPicker";
 import {
   fetchFilterSets,
   updateTask,
@@ -45,6 +46,7 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
   const [quarantine, setQuarantine] = useState(task.quarantine_enabled);
 
   const [filterSets, setFilterSets] = useState<FilterSet[]>([]);
+  const [parcourt, setParcourt] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -101,7 +103,28 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
           value={localPath}
           onChange={(event) => setLocalPath(event.target.value)}
         />
+        <span className="actions">
+          <button
+            type="button"
+            className="btn btn--small btn--ghost"
+            onClick={() => setParcourt((ouvert) => !ouvert)}
+          >
+            {parcourt ? "Fermer l'explorateur" : "Parcourir les dossiers…"}
+          </button>
+        </span>
       </label>
+
+      {parcourt && (
+        <LocalPicker
+          valeur={localPath}
+          destination={task.direction === "remote_to_local"}
+          onFermer={() => setParcourt(false)}
+          onChoisir={(chemin) => {
+            setLocalPath(chemin);
+            setParcourt(false);
+          }}
+        />
+      )}
 
       <label className="field">
         <span className="field__label">Dossier distant</span>

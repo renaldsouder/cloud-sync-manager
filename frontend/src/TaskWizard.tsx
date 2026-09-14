@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import LocalPicker from "./LocalPicker";
 import { createTask, fetchRemotes, type Remote, type Task } from "./api";
 
 type Props = {
@@ -43,6 +44,7 @@ export default function TaskWizard({
     template?.direction ?? "local_to_remote",
   );
   const [mode, setMode] = useState<Mode>(template?.mode ?? "copy");
+  const [parcourt, setParcourt] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -249,7 +251,29 @@ export default function TaskWizard({
           <code> appdata</code>, <code>system</code> et <code>domains</code> ne peuvent
           pas être une destination.
         </span>
+        <span className="actions">
+          <button
+            type="button"
+            className="btn btn--small btn--ghost"
+            onClick={() => setParcourt((ouvert) => !ouvert)}
+          >
+            {parcourt ? "Fermer l'explorateur" : "Parcourir les dossiers…"}
+          </button>
+        </span>
       </label>
+
+      {parcourt && (
+        <LocalPicker
+          valeur={localPath}
+          destination={direction === "remote_to_local"}
+          onFermer={() => setParcourt(false)}
+          onChoisir={(chemin) => {
+            setLocalPath(chemin);
+            setParcourt(false);
+          }}
+        />
+      )}
+
 
       <label className="field">
         <span className="field__label">Dossier distant</span>
