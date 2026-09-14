@@ -5,12 +5,16 @@ import LoginView from "./LoginView";
 import RemotesView from "./RemotesView";
 import SettingsView from "./SettingsView";
 import TasksView from "./TasksView";
+import WelcomeView from "./WelcomeView";
 import {
+  dismissOnboarding,
   fetchAuthSession,
   fetchHealth,
+  fetchOnboarding,
   logout,
   type AuthState,
   type Health,
+  type Onboarding,
 } from "./api";
 
 const LABELS: Record<string, string> = {
@@ -23,6 +27,7 @@ type Tab = "bord" | "taches" | "stockages" | "parametres" | "etat";
 export default function App() {
   const [tab, setTab] = useState<Tab>("bord");
   const [health, setHealth] = useState<Health | null>(null);
+  const [accueil, setAccueil] = useState<Onboarding | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [auth, setAuth] = useState<AuthState | null>(null);
 
@@ -41,6 +46,19 @@ export default function App() {
   useEffect(() => {
     void refreshAuth();
   }, [refreshAuth, tab]);
+
+  // Relu au changement d'onglet : une étape franchie ailleurs doit se
+  // refléter en revenant au tableau de bord, sans recharger la page.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOnboarding(controller.signal)
+      .then(setAccueil)
+      .catch(() => {
+        // L'assistant est une aide : son absence ne doit jamais empêcher
+        // d'utiliser le reste.
+      });
+    return () => controller.abort();
+  }, [tab]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -117,7 +135,15 @@ export default function App() {
       )}
 
       {tab === "bord" ? (
-        <DashboardView />
+        accueil && !accueil.dismissed && !accueil.completed ? (
+          <WelcomeView
+            etat={accueil}
+            onAller={(onglet) => setTab(onglet)}
+            onIgnorer={() => void dismissOnboarding().then(setAccueil)}
+          />
+        ) : (
+          <DashboardView />
+        )
       ) : tab === "taches" ? (
         <TasksView bidirectional={health?.features?.bidirectional ?? false} />
       ) : tab === "stockages" ? (

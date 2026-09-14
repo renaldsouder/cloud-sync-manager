@@ -471,6 +471,40 @@ body {
   color: var(--ink);
 }
 
+.etapes {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+}
+
+.etape {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.etape__marque {
+  flex: 0 0 20px;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.etape--faite .etape__marque {
+  color: var(--ok);
+}
+
+.etape--faite .etape__corps strong {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.etape__corps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .bisync {
   margin: 10px 0 4px;
   padding: 12px 14px;

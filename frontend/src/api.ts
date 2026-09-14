@@ -101,6 +101,22 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
 }
 
+export type Onboarding = {
+  password: boolean;
+  remote: boolean;
+  remote_tested: boolean;
+  task: boolean;
+  simulation: boolean;
+  dismissed: boolean;
+  completed: boolean;
+};
+
+export const fetchOnboarding = (signal?: AbortSignal) =>
+  request<Onboarding>("/api/onboarding", { signal });
+
+export const dismissOnboarding = () =>
+  request<Onboarding>("/api/onboarding/dismiss", { method: "POST" });
+
 export const fetchHealth = (signal?: AbortSignal) =>
   request<Health>("/api/health", { signal });
 
