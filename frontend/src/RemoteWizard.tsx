@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { AideStockage, Repli } from "./HelpView";
 import OAuthPanel from "./OAuthPanel";
 import { createRemote, fetchProviders, type Provider } from "./api";
 
@@ -107,6 +108,10 @@ export default function RemoteWizard({ onCreated, onCancel }: Props) {
           />
           Afficher tous les fournisseurs pris en charge par rclone
         </label>
+
+        <Repli titre="Comment se connecte-t-on à un fournisseur ?">
+          <AideStockage />
+        </Repli>
       </section>
     );
   }

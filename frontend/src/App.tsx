@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import DashboardView from "./DashboardView";
+import HelpView from "./HelpView";
 import LoginView from "./LoginView";
 import RemotesView from "./RemotesView";
 import SettingsView from "./SettingsView";
@@ -22,7 +23,7 @@ const LABELS: Record<string, string> = {
   rclone: "Moteur rclone",
 };
 
-type Tab = "bord" | "taches" | "stockages" | "parametres" | "etat";
+type Tab = "bord" | "taches" | "stockages" | "parametres" | "aide" | "etat";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("bord");
@@ -97,6 +98,7 @@ export default function App() {
               ["taches", "Tâches"],
               ["stockages", "Stockages Cloud"],
               ["parametres", "Paramètres"],
+              ["aide", "Aide"],
               ["etat", "État"],
             ] as [Tab, string][]
           ).map(([value, label]) => (
@@ -150,6 +152,8 @@ export default function App() {
         <RemotesView />
       ) : tab === "parametres" ? (
         <SettingsView />
+      ) : tab === "aide" ? (
+        <HelpView bidirectional={health?.features?.bidirectional ?? false} />
       ) : (
         <section className="card">
           <h2>État du service</h2>

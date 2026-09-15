@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { AideModes, AideSuppressions, Repli } from "./HelpView";
 import LocalPicker from "./LocalPicker";
 import RemotePicker from "./RemotePicker";
 import { createTask, fetchRemotes, type Remote, type Task } from "./api";
@@ -228,6 +229,10 @@ export default function TaskWizard({
         )}
       </fieldset>
 
+      <Repli titre="Quelle différence entre ces modes, et que supprime chacun ?">
+        <AideModes bidirectional={bidirectional} />
+      </Repli>
+
       {mode === "mirror" && (
         <div className="notice">
           <strong>Protections appliquées à ce mode</strong>
@@ -238,6 +243,9 @@ export default function TaskWizard({
             seuil de la tâche, rien n'est touché et votre validation est demandée.
             Les fichiers supprimés sont déplacés dans une corbeille à destination.
           </p>
+          <Repli titre="Où vont les fichiers supprimés, et comment les récupérer ?">
+            <AideSuppressions />
+          </Repli>
         </div>
       )}
 

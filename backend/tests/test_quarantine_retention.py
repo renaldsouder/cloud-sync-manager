@@ -33,6 +33,20 @@ def stamp(days_ago: float) -> str:
 # -- règle de rétention -----------------------------------------------------
 
 
+def test_the_documented_retention_matches_the_defaults() -> None:
+    """L'aide intégrée (AIDE-002) annonce des chiffres précis à
+    l'utilisateur : trente jours, et les trois dernières corbeilles conservées
+    quoi qu'il arrive. Les changer sans corriger l'aide reviendrait à faire
+    mentir l'application sur la seule chose qui compte au moment où l'on
+    cherche à récupérer un fichier.
+    """
+    from csm.config import Settings
+
+    defauts = Settings()
+    assert defauts.quarantine_retention_days == 30
+    assert defauts.quarantine_keep_runs == 3
+
+
 def test_recent_batches_are_kept() -> None:
     names = [stamp(1), stamp(5), stamp(29)]
     assert expired_batches(names, now=NOW, retention_days=30, keep_last=3) == []

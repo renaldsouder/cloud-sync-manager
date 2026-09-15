@@ -826,6 +826,114 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Aide intégrée (AIDE-001, AIDE-002) ---------------------------------- */
+
+.aide {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+.aide p {
+  margin: 0 0 12px;
+}
+
+.aide h4 {
+  margin: 18px 0 8px;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.aide ol {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.aide li {
+  margin-bottom: 8px;
+}
+
+.aide strong {
+  color: var(--ink);
+}
+
+.aide code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: 12.5px;
+}
+
+/* Les tableaux peuvent déborder sur un écran étroit : on fait défiler le
+   tableau, jamais la page entière. */
+.aide__table {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.aide__table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.aide__table th,
+.aide__table td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.aide__table thead th {
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.aide__table tbody th {
+  color: var(--ink);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.aide__liste {
+  margin: 0;
+}
+
+.aide__liste dt {
+  margin-top: 12px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.aide__liste dd {
+  margin: 4px 0 0;
+}
+
+.aide__repli {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
+.aide__repli summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.aide__repli[open] summary {
+  margin-bottom: 10px;
+  color: var(--ink);
+}
+
+.aide__contenu {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
 /* --- Recherche et tri des tâches (UI-005) -------------------------------- */
 
 .outils {
