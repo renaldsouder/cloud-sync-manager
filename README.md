@@ -38,7 +38,7 @@ and whose own success criterion has barely started running.
 | S3, B2, WebDAV, SFTP | Implemented, **never exercised against a real service** |
 | Unraid notifications | Validated against a real Unraid 7.3.2 |
 | 30 days of real use — the project's own success criterion | Under way, started 9 September 2026 |
-| Bidirectional sync | Deliberately absent until its destructive test matrix is complete |
+| Bidirectional sync | Open: destructive matrix covered — but against a local folder, and **no real provider has been validated for this mode yet** |
 | English web interface | Not done — **the interface is French only** |
 
 Two things follow from that table.
@@ -215,8 +215,11 @@ configuration, the logs and the applied filter sets.
 - **Notifications** — Unraid's built-in API and a generic webhook
 - **Backup** — export and restore the configuration, credentials excluded by
   design; restored tasks arrive paused
-- **Bidirectional** — deliberately **not** available until its destructive test
-  matrix is complete. Half-reliable, it would lose data.
+- **Bidirectional** — available. Changes travel both ways after an explicit
+  initialisation that merges the two sides; a file edited on both keeps two
+  suffixed versions. Its destructive test matrix is covered, **but against a
+  local folder only**: no real provider has been exercised in this mode yet.
+  Start on a test folder, not on your photos.
 
 ## Development
 

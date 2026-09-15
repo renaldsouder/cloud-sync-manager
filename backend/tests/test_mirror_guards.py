@@ -164,6 +164,34 @@ def test_confirmation_does_not_bypass_the_source_check(
 # -- §8.3 seuil de suppression ----------------------------------------------
 
 
+def test_zero_is_the_strictest_threshold_not_the_absence_of_one() -> None:
+    """Il n'existe pas de valeur « sans limite », et zéro n'en est pas une.
+
+    L'interface a longtemps annoncé « 0 désactive ce critère » alors que le
+    moteur bloque dès la première suppression. Le mensonge allait dans le sens
+    dangereux : quelqu'un cherchant à lever la protection croyait l'avoir
+    levée. Ce test fixe la règle du côté du moteur, qui est le bon.
+    """
+    from csm.services.guards import DeletionPlan, evaluate_threshold
+
+    une = DeletionPlan(deletes=1, checks=1000)
+    assert evaluate_threshold(une, max_deletes=0, max_delete_percent=None)
+    assert evaluate_threshold(une, max_deletes=1, max_delete_percent=None) is None
+
+
+def test_a_percentage_says_nothing_about_a_handful_of_files() -> None:
+    """Sur cinq fichiers, en supprimer un fait 20 % : un seuil en pourcentage
+    y déclencherait sans arrêt, et l'on apprendrait à passer outre — ce qui
+    viderait le garde-fou de son sens là où il compte."""
+    from csm.services.guards import DeletionPlan, evaluate_threshold
+
+    poignee = DeletionPlan(deletes=1, checks=5)
+    assert evaluate_threshold(poignee, max_deletes=None, max_delete_percent=10) is None
+
+    masse = DeletionPlan(deletes=6, checks=30)
+    assert evaluate_threshold(masse, max_deletes=None, max_delete_percent=10)
+
+
 def test_one_deletion_passes_and_is_quarantined(
     client: TestClient, tmp_path: Path, local_root: Path
 ) -> None:

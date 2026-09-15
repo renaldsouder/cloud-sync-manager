@@ -552,8 +552,8 @@ class RunManager:
             raise RunError(f"mode inconnu : {task.mode}")
         if task.mode == "bisync" and not self._bidirectional_enabled:
             raise RunError(
-                "le mode bidirectionnel n'est pas encore disponible : sa "
-                "matrice de tests destructifs n'est pas complète"
+                "le mode bidirectionnel est désactivé sur cette installation "
+                "(CSM_BIDIRECTIONAL_ENABLED)"
             )
         if task.mode not in SUPPORTED_MODES and task.mode != "bisync":
             raise RunError(f"le mode « {task.mode} » n'est pas encore disponible")

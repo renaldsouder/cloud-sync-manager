@@ -5,8 +5,9 @@ référence commune. Cette ré-initialisation **fusionne les deux côtés** : el
 ne doit jamais partir d'elle-même, et elle doit avoir été simulée avant d'être
 appliquée.
 
-Le mode reste fermé par défaut tant que la matrice du §20.3 n'est pas
-couverte ; ``test_the_mode_is_closed_by_default`` verrouille cette promesse.
+Le mode est ouvert par défaut depuis que cette matrice est couverte, mais le
+drapeau reste : c'est l'interrupteur qui referme le mode sans toucher aux
+tâches existantes.
 """
 
 from __future__ import annotations
@@ -29,7 +30,12 @@ pytestmark = pytest.mark.usefixtures("rclone_path")
 
 @pytest.fixture
 def ouvert(tmp_path: Path, local_root: Path, rclone_path: str) -> Iterator[TestClient]:
-    """Une instance où le bidirectionnel est déverrouillé."""
+    """Une instance où le bidirectionnel est déverrouillé.
+
+    Le drapeau y est posé explicitement : ces tests décrivent le mode ouvert
+    et ne doivent pas se mettre à décrire autre chose le jour où le défaut
+    changerait.
+    """
     settings = Settings(
         config_dir=tmp_path / "config",
         web_dir=tmp_path / "no-web",
@@ -37,6 +43,21 @@ def ouvert(tmp_path: Path, local_root: Path, rclone_path: str) -> Iterator[TestC
         rclone_binary=rclone_path,
         scheduler_enabled=False,
         bidirectional_enabled=True,
+    )
+    with TestClient(create_app(settings)) as client:
+        yield client
+
+
+@pytest.fixture
+def ferme(tmp_path: Path, local_root: Path, rclone_path: str) -> Iterator[TestClient]:
+    """Une instance où l'exploitant a refermé le mode."""
+    settings = Settings(
+        config_dir=tmp_path / "config",
+        web_dir=tmp_path / "no-web",
+        allowed_roots=str(local_root),
+        rclone_binary=rclone_path,
+        scheduler_enabled=False,
+        bidirectional_enabled=False,
     )
     with TestClient(create_app(settings)) as client:
         yield client
@@ -90,19 +111,37 @@ def settings_of(client: TestClient, task_id: str) -> dict:
         session.close()
 
 
-# -- verrou de livraison ------------------------------------------------------
+# -- interrupteur de livraison ------------------------------------------------
 
 
-def test_the_mode_is_closed_by_default(client: TestClient, tmp_path: Path, local_root: Path) -> None:
-    """§21 — reporté plutôt que livré avec un risque de perte de données.
+def test_the_mode_is_open_by_default(
+    client: TestClient, tmp_path: Path, local_root: Path
+) -> None:
+    """Le client ordinaire est la configuration que reçoivent les
+    utilisateurs : le mode y est disponible.
 
-    Le client ordinaire n'active pas le drapeau : c'est la configuration que
-    reçoivent les utilisateurs.
+    Le refus attendu n'est plus celui de la disponibilité mais celui du
+    protocole — la référence n'a pas encore été établie. Distinguer les deux
+    est tout l'intérêt de ce test : un verrou de livraison resté en place se
+    présenterait sinon comme un simple défaut d'initialisation.
     """
     task_id = make_bisync_task(client, local_root / "local", tmp_path / "cloud")
     refused = run(client, task_id)
     assert refused.status_code == 409
-    assert "pas encore disponible" in refused.json()["detail"]
+    detail = refused.json()["detail"]
+    assert "désactivé" not in detail, detail
+    assert "initialisée" in detail, detail
+
+
+def test_the_mode_can_still_be_closed(
+    ferme: TestClient, tmp_path: Path, local_root: Path
+) -> None:
+    """L'interrupteur reste utile : un exploitant qui ne veut pas de ce mode
+    doit pouvoir le refermer sans supprimer les tâches qui l'utilisent."""
+    task_id = make_bisync_task(ferme, local_root / "local", tmp_path / "cloud")
+    refused = run(ferme, task_id)
+    assert refused.status_code == 409
+    assert "désactivé" in refused.json()["detail"]
 
 
 # -- protocole ----------------------------------------------------------------

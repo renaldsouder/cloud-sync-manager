@@ -97,14 +97,22 @@ export function AideModes({ bidirectional = false }: Props) {
         {!bidirectional && (
           <>
             {" "}
-            <strong>
-              Ce mode n'est pas ouvert sur cette installation
-            </strong>{" "}
-            : il attend la fin de ses tests destructifs. À moitié fiable, il
-            perdrait des données.
+            <strong>Ce mode est désactivé sur cette installation.</strong>
           </>
         )}
       </p>
+
+      {bidirectional && (
+        <p className="state state--error">
+          Ses garde-fous destructifs sont éprouvés, mais contre un dossier
+          local tenant lieu de Cloud. <strong>Aucun fournisseur réel n'a
+          encore été validé dans ce mode</strong> : un Cloud ne se comporte
+          pas comme un disque, en particulier sur les dates de modification
+          et la casse des noms — deux choses dont le bidirectionnel dépend
+          entièrement pour décider quel côté a raison. Commencez sur un
+          dossier de test.
+        </p>
+      )}
     </div>
   );
 }

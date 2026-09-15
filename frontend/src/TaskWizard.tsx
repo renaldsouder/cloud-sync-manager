@@ -249,6 +249,30 @@ export default function TaskWizard({
         </div>
       )}
 
+      {mode === "bisync" && (
+        <div className="notice">
+          <strong>Ce mode peut supprimer des deux côtés</strong>
+          <p>
+            Rien ne partira avant une initialisation explicite, qui fusionne
+            les deux arborescences et doit être simulée d'abord. Ensuite, les
+            mêmes protections qu'un Miroir s'appliquent — de chaque côté : un
+            côté anormalement vide arrête tout, le seuil de suppression est
+            mesuré avant d'agir, et les fichiers retirés passent par une
+            corbeille locale comme distante.
+          </p>
+          <p className="state state--error">
+            Ses garde-fous sont éprouvés contre un dossier local, pas encore
+            contre un vrai fournisseur. Un Cloud ne se comporte pas comme un
+            disque sur les dates de modification et la casse des noms, dont ce
+            mode dépend entièrement pour décider quel côté a raison.{" "}
+            <strong>Commencez sur un dossier de test.</strong>
+          </p>
+          <Repli titre="Où vont les fichiers supprimés, et comment les récupérer ?">
+            <AideSuppressions />
+          </Repli>
+        </div>
+      )}
+
       <label className="field">
         <span className="field__label">Dossier local</span>
         <input

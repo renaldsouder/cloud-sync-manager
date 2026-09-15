@@ -18,7 +18,7 @@
   <Overview>
     Synchronisez vos shares Unraid avec Google Drive, OneDrive, Dropbox, S3, Backblaze B2, WebDAV ou SFTP, depuis une interface Web — sans ligne de commande.
 
-    Version 0.2.4, en cours de qualification. L'interface est en français uniquement. Le bidirectionnel n'est pas disponible : il attend la fin de ses tests destructifs. À ce jour, seul OneDrive a été éprouvé avec un vrai compte — les autres fournisseurs sont implémentés mais pas encore confrontés à un service réel. Commencez par une Copie, sur des données dont vous avez une sauvegarde.
+    Version 0.2.4, en cours de qualification. L'interface est en français uniquement. Le bidirectionnel est disponible, mais ses garde-fous n'ont encore été éprouvés que contre un dossier local : commencez-y par un dossier de test. À ce jour, seul OneDrive a été éprouvé avec un vrai compte — les autres fournisseurs sont implémentés mais pas encore confrontés à un service réel. Commencez par une Copie, sur des données dont vous avez une sauvegarde.
 
     Choisissez un stockage Cloud, un dossier local, un sens de synchronisation, planifiez, et laissez fonctionner. Moteur rclone.
 
@@ -71,4 +71,8 @@
   <Config Name="Rétention de l'historique (jours)" Target="CSM_HISTORY_RETENTION_DAYS" Default="90" Mode=""
           Description="Âge au-delà duquel une exécution est retirée de l'historique."
           Type="Variable" Display="advanced" Required="false" Mask="false">90</Config>
+
+  <Config Name="Mode bidirectionnel" Target="CSM_BIDIRECTIONAL_ENABLED" Default="true" Mode=""
+          Description="Autorise le mode Bidirectionnel, qui peut supprimer des deux côtés. Mettre false pour le retirer de l'interface sans toucher aux tâches existantes."
+          Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
 </Container>

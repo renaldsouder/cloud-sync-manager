@@ -40,7 +40,7 @@ courir.
 | S3, B2, WebDAV, SFTP | Implémentés, **jamais confrontés à un vrai service** |
 | Notifications Unraid | Validées sur un vrai Unraid 7.3.2 |
 | 30 jours d'utilisation réelle — le critère de réussite du projet (§22) | En cours, démarré le 9 septembre 2026 |
-| Bidirectionnel | Délibérément absent tant que sa matrice de tests destructifs n'est pas complète |
+| Bidirectionnel | Ouvert : matrice destructive couverte — mais contre un dossier local, et **aucun fournisseur réel n'a encore été validé pour ce mode** |
 | Interface en anglais | Pas faite — l'interface est en français uniquement |
 
 Deux conséquences.
@@ -229,8 +229,12 @@ rclone, les journaux et les jeux de filtres appliqués.
 - **Notifications** — API intégrée d'Unraid et webhook générique
 - **Sauvegarde** — export et restauration de la configuration, identifiants
   volontairement exclus ; les tâches restaurées arrivent en pause
-- **Bidirectionnel** — délibérément **indisponible** tant que sa matrice de tests
-  destructifs n'est pas complète. À moitié fiable, il perdrait des données.
+- **Bidirectionnel** — disponible. Les modifications circulent dans les deux
+  sens, après une initialisation explicite qui fusionne les deux côtés ; un
+  fichier modifié de part et d'autre est conservé en deux versions suffixées.
+  Sa matrice de tests destructifs est couverte, **mais contre un dossier local
+  uniquement** : aucun fournisseur réel n'a encore été éprouvé dans ce mode.
+  Commencez sur un dossier de test, pas sur vos photos.
 
 ## Développement
 

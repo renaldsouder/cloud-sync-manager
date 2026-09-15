@@ -102,8 +102,23 @@ Ce mode est protégé par plusieurs garde-fous, dans cet ordre :
 
 ### Bidirectionnel
 
-Non disponible. Il ne sera proposé qu'après validation complète de sa matrice
-de tests — livré à moitié fiable, il ferait perdre des données.
+Disponible. Les modifications circulent dans les deux sens, après une
+**initialisation explicite** qui fusionne les deux arborescences et doit être
+simulée avant d'être appliquée. Ensuite, les protections ci-dessus jouent des
+deux côtés : un côté anormalement vide arrête tout, le seuil est mesuré avant
+d'agir, et les fichiers retirés passent par une corbeille locale **et**
+distante. Un fichier modifié des deux côtés est conservé en deux versions
+suffixées `…conflict1` et `…conflict2` — rien n'est perdu, mais le nom
+d'origine disparaît des deux bords, et c'est à vous de trancher.
+
+Sa matrice de tests destructifs est couverte, **mais contre un dossier local
+tenant lieu de Cloud**. Aucun fournisseur réel n'y a encore été éprouvé : un
+Cloud ne se comporte pas comme un disque sur les dates de modification et la
+casse des noms, dont ce mode dépend entièrement pour décider quel côté a
+raison. Commencez sur un dossier de test.
+
+La variable `CSM_BIDIRECTIONAL_ENABLED` à `false` retire le mode de
+l'interface sans toucher aux tâches qui l'utilisent.
 
 ---
 

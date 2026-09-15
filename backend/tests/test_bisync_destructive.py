@@ -68,6 +68,11 @@ def noms(dossier: Path) -> set[str]:
     return {f.name for f in dossier.iterdir() if f.is_file()}
 
 
+def noms_partout(dossier: Path) -> set[str]:
+    """Tous les fichiers du sous-arbre, corbeilles comprises."""
+    return {f.name for f in dossier.rglob("*") if f.is_file()}
+
+
 # -- §8.2 : source vide, côté démonté, côté inaccessible ----------------------
 
 
@@ -131,31 +136,62 @@ def test_an_unreachable_side_stops_everything(
 # -- §8.3 : volumes de suppression et seuil -----------------------------------
 
 
-@pytest.mark.parametrize("supprimes", [1, 2, 12])
+@pytest.mark.parametrize("supprimes", [1, 2, 4])
 def test_deletions_below_the_threshold_propagate(
     ouvert: TestClient,
     tmp_path: Path,
     local_root: Path,
     supprimes: int,
 ) -> None:
-    """Un fichier, 10 %, 100 % — le seuil décide, pas le hasard.
+    """Un fichier, puis 17 %, puis 33 % — sous le seuil, ça passe.
 
-    Le seuil est ici volontairement haut : on éprouve la propagation, le cas
-    du blocage a son propre test.
+    L'assertion est volontairement exacte. Accepter aussi « bloquée » ferait
+    passer ce test le jour où un garde-fou se déclencherait à tort sur une
+    suppression unique : il constaterait un blocage au lieu de le dénoncer.
+
+    Le cas des 100 % n'est pas ici : un côté entièrement vidé relève du §8.2,
+    et ``test_an_emptied_side_never_empties_the_other`` en répond.
     """
     local, cloud = local_root / "local", tmp_path / "cloud"
     task_id = make_bisync_task(ouvert, local, cloud)
     peupler(local, 12)
     initialise(ouvert, task_id)
 
-    configure(ouvert, task_id, max_deletes=100, max_delete_percent=100)
+    configure(ouvert, task_id, max_deletes=1000, max_delete_percent=100)
     for fichier in sorted(local.iterdir())[:supprimes]:
         fichier.unlink()
 
     final = wait(ouvert, run(ouvert, task_id, dry_run=False).json()["id"])
-    assert final["status"] in {"success", "warning", "blocked"}, final
-    if final["status"] != "blocked":
-        assert len(noms(cloud)) == 12 - supprimes
+    assert final["status"] in {"success", "warning"}, final
+    assert noms(cloud) == noms(local), "les deux côtés doivent se rejoindre"
+    assert len(noms(cloud)) == 12 - supprimes
+
+
+def test_the_percentage_belt_blocks_a_bidirectional_run(
+    ouvert: TestClient, tmp_path: Path, local_root: Path
+) -> None:
+    """§8.3 — la ceinture qui ne dépend pas du volume absolu.
+
+    Le seuil en nombre protège les petites arborescences ; sur dix mille
+    fichiers, cent suppressions ne disent rien alors qu'un tiers de
+    l'arborescence dit tout. Le bidirectionnel n'empruntait cette seconde
+    ceinture dans aucun test : seul le seuil absolu était éprouvé.
+    """
+    local, cloud = local_root / "local", tmp_path / "cloud"
+    task_id = make_bisync_task(ouvert, local, cloud)
+    peupler(local, 20)
+    initialise(ouvert, task_id)
+
+    # Seuil absolu volontairement hors de portée : c'est le pourcentage
+    # qu'on éprouve, pas lui.
+    configure(ouvert, task_id, max_deletes=1000, max_delete_percent=10)
+    for fichier in sorted(local.iterdir())[:6]:
+        fichier.unlink()
+
+    final = wait(ouvert, run(ouvert, task_id, dry_run=False).json()["id"])
+    assert final["status"] == "blocked", final
+    assert len(noms(cloud)) == 20, "aucune suppression avant validation"
+    assert "%" in final["summary"]["blocked_reason"], final["summary"]
 
 
 def test_crossing_the_threshold_blocks_without_deleting(
@@ -265,6 +301,70 @@ def test_a_stopped_run_is_never_reported_as_successful(
 
     final = wait(ouvert, started["id"])
     assert final["status"] == "interrupted", final
+
+
+def test_a_run_stopped_while_destroying_loses_nothing(
+    ouvert: TestClient, tmp_path: Path, local_root: Path
+) -> None:
+    """§20.3 « arrêt pendant suppression ».
+
+    L'endroit exact où tombe l'arrêt n'est pas pilotable, et un test qui
+    prétendrait le viser serait instable. Ce qui doit tenir, quel que soit cet
+    endroit, c'est l'invariant : chaque fichier est encore à sa place ou dans
+    une corbeille. Aucun ne s'est volatilisé au milieu du geste.
+    """
+    local, cloud = local_root / "local", tmp_path / "cloud"
+    task_id = make_bisync_task(ouvert, local, cloud)
+    peupler(local, 60, prefixe="gros")
+    for fichier in local.iterdir():
+        fichier.write_text("x" * 20_000, encoding="utf-8")
+    initialise(ouvert, task_id)
+
+    origine = noms(cloud)
+    assert len(origine) == 60
+
+    # De quoi occuper l'exécution dans les deux registres : des suppressions
+    # à propager, et des transferts que la bride ralentit.
+    for fichier in sorted(local.iterdir())[:15]:
+        fichier.unlink()
+    for index in range(15):
+        (local / f"neuf{index}.txt").write_text("y" * 20_000, encoding="utf-8")
+
+    configure(
+        ouvert,
+        task_id,
+        max_deletes=1000,
+        max_delete_percent=100,
+        bandwidth_json=json.dumps({"limit": "8k"}),
+    )
+
+    started = run(ouvert, task_id, dry_run=False).json()
+
+    # Arrêter dès le départ tomberait toujours pendant la construction des
+    # listings, et le test ne prouverait rien de ce qu'annonce son nom. On
+    # attend donc qu'un compteur ait bougé : à ce moment, bisync applique
+    # ses changements.
+    debut = time.monotonic()
+    travail = 0
+    while time.monotonic() - debut < 60:
+        courant = ouvert.get(f"/api/runs/{started['id']}").json()
+        if courant["status"] != "running":
+            break
+        live = courant.get("live") or {}
+        compteurs = live.get("counters") or {}
+        travail = compteurs.get("transfers", 0) + compteurs.get("deletes", 0)
+        if travail > 0:
+            ouvert.post(f"/api/runs/{started['id']}/stop")
+            break
+        time.sleep(0.05)
+
+    final = wait(ouvert, started["id"])
+    assert travail > 0, "l'arrêt n'a jamais atteint l'application des changements"
+    assert final["status"] == "interrupted", final
+
+    survivants = noms_partout(cloud)
+    perdus = origine - survivants
+    assert not perdus, f"{len(perdus)} fichier(s) volatilisés : {sorted(perdus)[:5]}"
 
 
 def test_a_crash_leaves_a_lock_that_startup_lifts(

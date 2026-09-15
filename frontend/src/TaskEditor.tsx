@@ -200,7 +200,10 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
               value={maxDeletes}
               onChange={(event) => setMaxDeletes(event.target.value)}
             />
-            <span className="field__help">0 désactive ce critère.</span>
+            <span className="field__help">
+              0 bloque dès la première suppression. Il n'existe pas de valeur
+              «&nbsp;sans limite&nbsp;» : c'est volontaire.
+            </span>
           </label>
 
           <label className="field">
@@ -216,7 +219,9 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
             />
             <span className="field__help">
               Au-delà de l'un ou l'autre, la tâche s'arrête et attend votre
-              validation, en nommant les fichiers concernés.
+              validation, en nommant les fichiers concernés. Le pourcentage ne
+              s'applique qu'au-delà de cinq suppressions : sur une poignée de
+              fichiers, il ne voudrait rien dire.
             </span>
           </label>
 

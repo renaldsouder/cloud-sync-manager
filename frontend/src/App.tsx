@@ -188,8 +188,8 @@ export default function App() {
         Copie et Miroir dans les deux sens, protections destructives, planification,
         filtres, notifications et sauvegarde de configuration.{" "}
         {health?.features?.bidirectional
-          ? "Le bidirectionnel demande une initialisation explicite avant sa première exécution."
-          : "Le bidirectionnel attend la fin de ses tests destructifs : à moitié fiable, il perdrait des données."}
+          ? "Le bidirectionnel demande une initialisation explicite avant sa première exécution, et n'a encore été éprouvé contre aucun fournisseur réel."
+          : "Le bidirectionnel est désactivé sur cette installation."}
       </footer>
     </main>
   );
