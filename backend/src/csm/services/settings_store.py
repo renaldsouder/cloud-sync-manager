@@ -20,9 +20,29 @@ UNRAID_API_KEY = "notifications.unraid_api_key"
 WEBHOOK_URL = "notifications.webhook_url"
 NOTIFY_EVENTS = "notifications.events"
 ALLOW_SELF_SIGNED = "notifications.allow_self_signed"
+LOG_LEVEL = "logging.level"
 
 #: Clés dont la valeur ne doit jamais ressortir de l'application (§6.1).
 SECRET_KEYS = frozenset({UNRAID_API_KEY})
+
+#: Niveaux de journalisation (LOG-003, §14). Les valeurs stockées restent
+#: en ASCII : elles voyagent dans du JSON et dans des URL.
+LOG_LEVELS = ("normal", "detaille", "diagnostic")
+DEFAULT_LOG_LEVEL = "normal"
+
+#: Verbosité demandée à rclone. rclone ne connaît que DEBUG, INFO, NOTICE et
+#: ERROR : « normal » et « détaillé » partagent donc INFO, et ce qui les
+#: distingue est ce que *nous* conservons — voir ``NARRATED_LEVELS``.
+RCLONE_LOG_LEVEL = {
+    "normal": "INFO",
+    "detaille": "INFO",
+    "diagnostic": "DEBUG",
+}
+
+#: Niveaux où le déroulé annoncé par rclone est conservé en base, en plus des
+#: transferts, suppressions, conflits et erreurs. C'est du volume pur : il ne
+#: s'enregistre que si quelqu'un l'a demandé.
+NARRATED_LEVELS = frozenset({"detaille", "diagnostic"})
 
 
 def get(session: Session, key: str) -> str | None:
@@ -52,6 +72,29 @@ def public_settings(session: Session) -> dict[str, object]:
         "events": _events(stored.get(NOTIFY_EVENTS)),
         "allow_self_signed": stored.get(ALLOW_SELF_SIGNED) == "1",
     }
+
+
+def log_level(session: Session) -> str:
+    """Niveau de journalisation en vigueur (LOG-003).
+
+    Une valeur inconnue — base éditée à la main, réglage d'une version
+    ultérieure — retombe sur « normal » plutôt que d'interrompre une
+    exécution : le niveau de logs ne doit jamais empêcher de synchroniser.
+    """
+    stored = get(session, LOG_LEVEL)
+    return stored if stored in LOG_LEVELS else DEFAULT_LOG_LEVEL
+
+
+def logging_settings(session: Session) -> dict[str, object]:
+    return {"level": log_level(session)}
+
+
+def update_logging(session: Session, *, level: str | None = None) -> None:
+    if level is None:
+        return
+    if level not in LOG_LEVELS:
+        raise ValueError(f"niveau de journalisation inconnu : {level}")
+    put(session, LOG_LEVEL, level)
 
 
 def notification_config(session: Session) -> NotificationConfig:

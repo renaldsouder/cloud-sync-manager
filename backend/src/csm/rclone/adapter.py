@@ -47,6 +47,11 @@ BISYNC_CONFLICT_RESOLVE = frozenset(
 #: jamais par défaut.
 BISYNC_CONFLICT_LOSER = frozenset({"num", "pathname", "delete"})
 
+#: Verbosités acceptées par rclone (LOG-003). Une valeur inconnue n'est pas
+#: ignorée : rclone la refuserait au démarrage, et la tâche échouerait pour
+#: une raison sans aucun rapport avec la synchronisation.
+RCLONE_LOG_LEVELS = frozenset({"DEBUG", "INFO", "NOTICE", "ERROR"})
+
 #: Catalogue des fournisseurs, mémorisé par chemin de binaire.
 _PROVIDER_CACHE: dict[str, list[dict[str, Any]]] = {}
 
@@ -242,6 +247,7 @@ class RcloneAdapter:
         bwlimit: str | None = None,
         backup_dir: str | None = None,
         filter_file: str | None = None,
+        log_level: str = "INFO",
         extra: list[str] | None = None,
     ) -> list[str]:
         """Construit la ligne de commande d'un transfert.
@@ -252,6 +258,8 @@ class RcloneAdapter:
         """
         if operation not in {"copy", "sync"}:
             raise ValueError(f"opération non supportée : {operation}")
+        if log_level not in RCLONE_LOG_LEVELS:
+            raise ValueError(f"niveau de journalisation inconnu : {log_level}")
 
         arguments = [
             operation,
@@ -259,7 +267,7 @@ class RcloneAdapter:
             destination,
             "--use-json-log",
             "--log-level",
-            "INFO",
+            log_level,
             "--stats",
             "1s",
             "--stats-log-level",
@@ -302,6 +310,7 @@ class RcloneAdapter:
         transfers: int | None = None,
         checkers: int | None = None,
         bwlimit: str | None = None,
+        log_level: str = "INFO",
         extra: list[str] | None = None,
     ) -> list[str]:
         """Construit la ligne de commande d'une synchronisation bidirectionnelle.
@@ -335,6 +344,8 @@ class RcloneAdapter:
             raise ValueError(f"arbitrage de conflit inconnu : {conflict_resolve}")
         if conflict_loser not in BISYNC_CONFLICT_LOSER:
             raise ValueError(f"sort du perdant inconnu : {conflict_loser}")
+        if log_level not in RCLONE_LOG_LEVELS:
+            raise ValueError(f"niveau de journalisation inconnu : {log_level}")
 
         arguments = [
             "bisync",
@@ -346,7 +357,7 @@ class RcloneAdapter:
             "NEVER",
             "--use-json-log",
             "--log-level",
-            "INFO",
+            log_level,
             "--stats",
             "1s",
             "--stats-log-level",

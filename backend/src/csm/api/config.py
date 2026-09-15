@@ -197,7 +197,7 @@ def _get(session: Session, filter_set_id: str) -> FilterSet:
 # -- paramètres --------------------------------------------------------------
 
 
-class NotificationsIn(BaseModel):
+class SettingsIn(BaseModel):
     unraid_url: str | None = None
     #: Absent = inchangé ; chaîne vide = effacement explicite. L'utilisateur
     #: peut donc enregistrer le formulaire sans retaper sa clé (§6.1).
@@ -205,16 +205,29 @@ class NotificationsIn(BaseModel):
     webhook_url: str | None = None
     events: list[str] | None = None
     allow_self_signed: bool | None = None
+    #: Niveau de journalisation (LOG-003). Même convention : absent =
+    #: inchangé, ce qui permet d'enregistrer les notifications sans le
+    #: toucher.
+    log_level: str | None = None
+
+
+def _settings_payload(session: Session) -> dict[str, Any]:
+    return {
+        "notifications": settings_store.public_settings(session),
+        "logging": settings_store.logging_settings(session),
+        "events": list(EVENTS),
+        "log_levels": list(settings_store.LOG_LEVELS),
+    }
 
 
 @router.get("/settings")
 def read_settings(session: Session = Depends(get_session)) -> dict[str, Any]:
-    return {"notifications": settings_store.public_settings(session), "events": list(EVENTS)}
+    return _settings_payload(session)
 
 
 @router.put("/settings")
 def write_settings(
-    payload: NotificationsIn, session: Session = Depends(get_session)
+    payload: SettingsIn, session: Session = Depends(get_session)
 ) -> dict[str, Any]:
     try:
         settings_store.update_notifications(
@@ -225,10 +238,11 @@ def write_settings(
             events=payload.events,
             allow_self_signed=payload.allow_self_signed,
         )
+        settings_store.update_logging(session, level=payload.log_level)
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     session.flush()
-    return {"notifications": settings_store.public_settings(session)}
+    return _settings_payload(session)
 
 
 @router.post("/settings/notifications/test")

@@ -10,6 +10,7 @@ import {
   saveSettings,
   testNotifications,
   type AuthState,
+  type LogLevel,
   type NotificationSettings,
 } from "./api";
 
@@ -20,10 +21,34 @@ const EVENT_LABELS: Record<string, string> = {
   success: "Succès (bruyant, désactivé par défaut)",
 };
 
+/** LOG-003 — ce que chaque niveau conserve, en clair. */
+const LOG_LEVELS: { value: LogLevel; label: string; help: string }[] = [
+  {
+    value: "normal",
+    label: "Normal",
+    help: "Les fichiers transférés, supprimés, les conflits et les erreurs.",
+  },
+  {
+    value: "detaille",
+    label: "Détaillé",
+    help:
+      "En plus, le déroulé annoncé par rclone : les phases, les vérifications, " +
+      "les renommages. Utile pour comprendre pourquoi une tâche ne transfère rien.",
+  },
+  {
+    value: "diagnostic",
+    label: "Diagnostic",
+    help:
+      "Tout, y compris le détail interne de rclone. Volumineux : à activer le " +
+      "temps de reproduire un problème, puis à remettre sur Normal.",
+  },
+];
+
 export default function SettingsView() {
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
   const [auth, setAuth] = useState<AuthState | null>(null);
   const [events, setEvents] = useState<string[]>([]);
+  const [logLevel, setLogLevel] = useState<LogLevel>("normal");
   const [apiKey, setApiKey] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +59,7 @@ export default function SettingsView() {
       const payload = await fetchSettings();
       setSettings(payload.notifications);
       setEvents(payload.events);
+      setLogLevel(payload.logging.level);
       setAuth(await fetchAuthSession());
       setError(null);
     } catch (cause: unknown) {
@@ -70,6 +96,21 @@ export default function SettingsView() {
       setApiKey("");
       await reload();
     }, "Paramètres enregistrés.");
+  }
+
+  async function changeLogLevel(niveau: LogLevel) {
+    const precedent = logLevel;
+    setLogLevel(niveau);
+    await run(async () => {
+      try {
+        await saveSettings({ log_level: niveau });
+      } catch (cause) {
+        // Laisser la liste afficher un niveau qui n'a pas été retenu ferait
+        // croire au diagnostic pendant qu'on journalise au minimum.
+        setLogLevel(precedent);
+        throw cause;
+      }
+    }, "Niveau de journalisation enregistré.");
   }
 
   async function download() {
@@ -213,6 +254,35 @@ export default function SettingsView() {
               </button>
             </div>
           </>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Journalisation</h2>
+        <p className="state">
+          Ce réglage décide de ce qui est conservé dans l'historique des
+          exécutions. Il ne change rien à ce qui est synchronisé, et n'agit
+          que sur les exécutions lancées ensuite.
+        </p>
+        {LOG_LEVELS.map((niveau) => (
+          <label className="toggle" key={niveau.value}>
+            <input
+              type="radio"
+              name="log-level"
+              checked={logLevel === niveau.value}
+              onChange={() => void changeLogLevel(niveau.value)}
+            />
+            <span>
+              <strong>{niveau.label}</strong>
+              <span className="field__help">{niveau.help}</span>
+            </span>
+          </label>
+        ))}
+        {logLevel === "diagnostic" && (
+          <p className="state state--error">
+            Le diagnostic remplit vite l'historique. Pensez à revenir sur
+            «&nbsp;Normal&nbsp;» une fois le problème reproduit.
+          </p>
         )}
       </section>
 

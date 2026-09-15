@@ -38,6 +38,7 @@ from csm.rclone.adapter import (
 )
 from csm.rclone.adapter import RcloneAdapter, RcloneError
 from csm.rclone.events import RcloneEvent
+from csm.security.redaction import redact
 from csm.services import guards
 from csm.services.tasks import MODES
 from csm.services import notifications, settings_store
@@ -118,6 +119,10 @@ class RunPlan:
     max_deletes: int | None = None
     max_delete_percent: int | None = None
     quarantine: bool = True
+    #: Niveau de journalisation en vigueur au lancement (LOG-003). Figé ici
+    #: plutôt que relu pendant l'exécution : changer le réglage en cours de
+    #: route donnerait un historique à moitié détaillé, impossible à lire.
+    log_level: str = settings_store.DEFAULT_LOG_LEVEL
 
     # -- bidirectionnel (SYNC-003) ------------------------------------------
     #: Répertoire des listings de bisync. Obligatoire pour ce mode : son
@@ -158,6 +163,7 @@ class LiveRun:
     dry_run: bool
     started_at: datetime
     resync: bool = False
+    log_level: str = settings_store.DEFAULT_LOG_LEVEL
     process: subprocess.Popen[str] | None = None
     phase: str = "démarrage"
     status: str = "running"
@@ -314,6 +320,7 @@ class RunManager:
             transfers=plan.transfers,
             checkers=plan.checkers,
             bwlimit=plan.bwlimit,
+            log_level=settings_store.RCLONE_LOG_LEVEL[plan.log_level],
             extra=extra,
         )
 
@@ -353,6 +360,7 @@ class RunManager:
 
             source, destination = endpoints(task, remote)
             performance = _performance(task)
+            verbosity = settings_store.log_level(session)
             bisync = bisync_settings(task) if task.mode == "bisync" else {}
             plan = RunPlan(
                 operation=_operation_of(task),
@@ -373,6 +381,7 @@ class RunManager:
                 conflict_resolve=bisync.get("conflict_resolve", "none"),
                 conflict_loser=bisync.get("conflict_loser", "num"),
                 check_access=bool(bisync.get("check_access", False)),
+                log_level=verbosity,
             )
 
             run = TaskRun(
@@ -393,6 +402,7 @@ class RunManager:
                 dry_run=dry_run,
                 started_at=datetime.now(timezone.utc),
                 resync=resync,
+                log_level=verbosity,
             )
         finally:
             session.close()
@@ -660,6 +670,7 @@ class RunManager:
             checkers=plan.checkers,
             backup_dir=backup_dir,
             filter_file=plan.filter_file,
+            log_level=settings_store.RCLONE_LOG_LEVEL[plan.log_level],
             extra=extra,
         )
 
@@ -729,6 +740,7 @@ class RunManager:
             transfers=plan.transfers,
             checkers=plan.checkers,
             filter_file=plan.filter_file,
+            log_level=settings_store.RCLONE_LOG_LEVEL[plan.log_level],
             # La corbeille doit être exclue ici aussi : sans cela, la
             # simulation compterait comme « à supprimer » tout ce qu'une
             # exécution précédente y a déposé, et ferait franchir le seuil
@@ -784,8 +796,11 @@ class RunManager:
             live.counters["conflicts"] += 1
         elif event.kind == rclone_events.ERROR:
             live.counters["errors"] += 1
-            live.last_error = event.message
-        else:
+            live.last_error = redact(event.message)
+        elif live.log_level not in settings_store.NARRATED_LEVELS:
+            # Déroulé interne de rclone : les phases, les vérifications, les
+            # renommages mécaniques. Sans intérêt tant que tout va bien, et
+            # volumineux — il ne s'enregistre que si on l'a demandé (LOG-003).
             return stored
 
         if stored < MAX_STORED_EVENTS:
@@ -795,7 +810,12 @@ class RunManager:
                     kind=event.kind,
                     path=event.path,
                     size=event.size,
-                    message=event.message,
+                    # Le message vient de rclone et peut porter une URL
+                    # signée ou un en-tête d'authentification, surtout en
+                    # diagnostic. Le chemin, lui, n'est pas filtré : c'est un
+                    # nom de fichier, et « token liste.txt » ne doit pas
+                    # devenir illisible dans l'historique (SEC-002, §14).
+                    message=redact(event.message) or "",
                 )
             )
             stored += 1
@@ -1097,6 +1117,7 @@ def _summary_json(live: LiveRun) -> str:
         "stats": live.stats,
         "counters": live.counters,
         "last_error": live.last_error,
+        "log_level": live.log_level,
     }
     if live.deletion_plan is not None:
         payload["deletion_plan"] = {

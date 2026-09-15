@@ -98,6 +98,15 @@ def _classify(
     if level in {"error", "critical"}:
         return ERROR
 
+    # Une ligne DEBUG raconte comment rclone s'y prend, jamais ce qu'il a
+    # fait : le résultat, lui, est annoncé en INFO. Sans cette coupure, le
+    # niveau diagnostic (LOG-003) compterait chaque fichier deux fois — la
+    # copie passe par un fichier « .partial » puis un « renamed to: » — et
+    # ferait passer pour des erreurs les tentatives que rclone réessaie
+    # lui-même. Les compteurs ne doivent pas dépendre de la verbosité.
+    if level == "debug":
+        return OTHER
+
     # bisync annonce son abandon en NOTICE, pas en ERROR. Sans ce cas, une
     # exécution échouée n'affiche aucun motif — et le §27.10 interdit de
     # réduire une erreur à « Échec ».

@@ -484,10 +484,18 @@ export const previewFilterSet = (id: string, path: string) =>
     body: JSON.stringify({ path }),
   });
 
+/** Niveaux de journalisation (LOG-003). */
+export type LogLevel = "normal" | "detaille" | "diagnostic";
+
+export type SettingsPayload = {
+  notifications: NotificationSettings;
+  logging: { level: LogLevel };
+  events: string[];
+  log_levels: LogLevel[];
+};
+
 export const fetchSettings = (signal?: AbortSignal) =>
-  request<{ notifications: NotificationSettings; events: string[] }>("/api/settings", {
-    signal,
-  });
+  request<SettingsPayload>("/api/settings", { signal });
 
 export const saveSettings = (body: {
   unraid_url?: string;
@@ -495,8 +503,10 @@ export const saveSettings = (body: {
   webhook_url?: string;
   events?: string[];
   allow_self_signed?: boolean;
+  /** Absent = inchangé : enregistrer les notifications n'y touche pas. */
+  log_level?: LogLevel;
 }) =>
-  request<{ notifications: NotificationSettings }>("/api/settings", {
+  request<SettingsPayload>("/api/settings", {
     method: "PUT",
     body: JSON.stringify(body),
   });
