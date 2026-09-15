@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import BlockedRun from "./BlockedRun";
 import BisyncPanel from "./BisyncPanel";
@@ -43,6 +43,66 @@ const MODE_LABEL: Record<Task["mode"], string> = {
   bisync: "Bidirectionnel",
 };
 
+/**
+ * Nombre de tâches à partir duquel la barre d'outils apparaît (UI-005).
+ *
+ * En dessous, tout tient à l'écran : un filtre serait un encombrement, et
+ * surtout un risque — laissé actif par mégarde, il fait croire qu'une tâche
+ * a disparu.
+ */
+const SEUIL_OUTILS = 5;
+
+type Tri = "attention" | "nom" | "prochaine";
+
+/** Ordre du tri « ce qui demande une action d'abord ». */
+const GRAVITE: Record<string, number> = {
+  blocked: 0,
+  needs_resync: 1,
+  error: 2,
+  warning: 3,
+  interrupted: 4,
+  running: 5,
+  ready: 6,
+  success: 7,
+};
+
+const ETATS: { value: string; label: string; statuts: string[] }[] = [
+  { value: "tous", label: "Tous les états", statuts: [] },
+  {
+    value: "action",
+    label: "Demandent une action",
+    statuts: ["blocked", "needs_resync", "error"],
+  },
+  {
+    value: "avertissement",
+    label: "Avertissements",
+    statuts: ["warning", "interrupted"],
+  },
+  { value: "encours", label: "En cours", statuts: ["running"] },
+  { value: "reussi", label: "Réussies", statuts: ["success"] },
+  { value: "attente", label: "Jamais exécutées", statuts: ["ready"] },
+];
+
+/** Recherche insensible à la casse **et** aux accents : personne ne tape
+ * « Été » pour retrouver « ete », et l'inverse est tout aussi vrai. */
+function replie(valeur: string): string {
+  return valeur
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function correspond(task: Task, recherche: string): boolean {
+  if (!recherche) return true;
+  const cible = replie(
+    `${task.name} ${task.local_path} ${task.remote_path}`,
+  );
+  return replie(recherche)
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((mot) => cible.includes(mot));
+}
+
 type Props = {
   bidirectional?: boolean;
 };
@@ -59,6 +119,13 @@ export default function TasksView({ bidirectional = false }: Props) {
   const [editing, setEditing] = useState<Task | null>(null);
   const [duplicating, setDuplicating] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+
+  // UI-005 — volontairement non mémorisé d'une visite à l'autre : un filtre
+  // retrouvé actif sans qu'on l'ait posé fait chercher une tâche qui est
+  // pourtant là.
+  const [recherche, setRecherche] = useState("");
+  const [etat, setEtat] = useState("tous");
+  const [tri, setTri] = useState<Tri>("attention");
 
   const reload = useCallback(async () => {
     try {
@@ -93,6 +160,39 @@ export default function TasksView({ bidirectional = false }: Props) {
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
+  }
+
+  const filtrant = recherche.trim() !== "" || etat !== "tous";
+
+  const visibles = useMemo(() => {
+    if (!tasks) return [];
+    const statuts = ETATS.find((e) => e.value === etat)?.statuts ?? [];
+    const retenues = tasks.filter(
+      (task) =>
+        correspond(task, recherche.trim()) &&
+        (statuts.length === 0 || statuts.includes(task.status)),
+    );
+
+    const parNom = (a: Task, b: Task) => a.name.localeCompare(b.name, "fr");
+    return [...retenues].sort((a, b) => {
+      if (tri === "nom") return parNom(a, b);
+      if (tri === "prochaine") {
+        // Une tâche sans planification n'a pas de prochaine exécution : elle
+        // passe après toutes celles qui en ont une, pas avant.
+        const sansDate = Number.MAX_SAFE_INTEGER;
+        const da = a.next_run_at ? Date.parse(a.next_run_at) : sansDate;
+        const db = b.next_run_at ? Date.parse(b.next_run_at) : sansDate;
+        return da === db ? parNom(a, b) : da - db;
+      }
+      const ga = GRAVITE[a.status] ?? 9;
+      const gb = GRAVITE[b.status] ?? 9;
+      return ga === gb ? parNom(a, b) : ga - gb;
+    });
+  }, [tasks, recherche, etat, tri]);
+
+  function toutAfficher() {
+    setRecherche("");
+    setEtat("tous");
   }
 
   async function toggleHistory(task: Task) {
@@ -160,8 +260,57 @@ export default function TasksView({ bidirectional = false }: Props) {
         </p>
       )}
 
+      {tasks && tasks.length >= SEUIL_OUTILS && (
+        <div className="outils">
+          <label className="field outils__recherche">
+            <span className="field__label">Rechercher</span>
+            <input
+              value={recherche}
+              placeholder="nom, dossier local ou distant"
+              onChange={(event) => setRecherche(event.target.value)}
+            />
+          </label>
+
+          <label className="field">
+            <span className="field__label">État</span>
+            <select value={etat} onChange={(event) => setEtat(event.target.value)}>
+              {ETATS.map((choix) => (
+                <option key={choix.value} value={choix.value}>
+                  {choix.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span className="field__label">Trier par</span>
+            <select
+              value={tri}
+              onChange={(event) => setTri(event.target.value as Tri)}
+            >
+              <option value="attention">Ce qui demande une action</option>
+              <option value="nom">Nom</option>
+              <option value="prochaine">Prochaine exécution</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      {tasks && filtrant && (
+        // Sans ce rappel, une tâche masquée par un filtre oublié passe pour
+        // une tâche supprimée.
+        <p className="state">
+          {visibles.length === 0
+            ? "Aucune tâche ne correspond."
+            : `${visibles.length} tâche(s) affichée(s) sur ${tasks.length}.`}{" "}
+          <button type="button" className="chip chip--button" onClick={toutAfficher}>
+            Tout afficher
+          </button>
+        </p>
+      )}
+
       <ul className="remotes">
-        {tasks?.map((task) => {
+        {visibles.map((task) => {
           const running = live[task.id];
           const history = runs[task.id];
           return (

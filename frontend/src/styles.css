@@ -826,6 +826,28 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Recherche et tri des tâches (UI-005) -------------------------------- */
+
+.outils {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.outils .field {
+  margin-bottom: 12px;
+}
+
+.outils__recherche {
+  flex: 1 1 220px;
+}
+
+.outils select {
+  min-width: 190px;
+}
+
 /* --- Planification ------------------------------------------------------- */
 
 .chip {
