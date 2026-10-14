@@ -18,8 +18,23 @@ env:
 
 jobs:
   backend:
+    # Version épinglée, et non l'étiquette mouvante. Cette CI est le seul
+    # endroit où le projet est éprouvé sous Linux — le développement se fait
+    # sous Windows et la cible est un conteneur. Or ces tests créent des liens
+    # symboliques, comparent des noms accentués, éprouvent la casse des
+    # fichiers et lancent un vrai rclone : autant d'endroits où un changement
+    # de système se voit.
+    #
+    # La bascule d'une étiquette mouvante est de surcroît progressive : un run
+    # peut tomber sur l'ancienne image et le suivant sur la nouvelle. Un échec
+    # intermittent sans qu'aucun commit n'ait bougé ne laisse alors aucun
+    # moyen rapide de trancher entre notre code et l'atelier.
+    #
+    # Le changement de version se fait donc dans un commit dont c'est le seul
+    # objet. Une image épinglée finit par être retirée, avec plusieurs mois de
+    # préavis : c'est une tâche d'entretien choisie plutôt qu'une surprise.
     name: Tests backend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +66,7 @@ jobs:
 
   frontend:
     name: Compilation frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -71,7 +86,7 @@ jobs:
 
   template:
     name: Validation du template Unraid
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Balises exigées par Community Applications
@@ -96,7 +111,7 @@ jobs:
 
   image:
     name: Image Docker
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [backend, frontend, template]
     permissions:
       contents: read
