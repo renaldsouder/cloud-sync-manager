@@ -14,6 +14,7 @@ from fastapi import APIRouter, Request
 from sqlalchemy import text
 
 from csm import __version__
+from csm.release_notes import RELEASES
 from csm.rclone.probe import rclone_version
 
 router = APIRouter(tags=["health"])
@@ -52,3 +53,14 @@ def health(request: Request) -> dict[str, Any]:
             "bidirectional": bool(settings and settings.bidirectional_enabled)
         },
     }
+
+
+@router.get("/release-notes")
+def release_notes() -> dict[str, Any]:
+    """Notes de version (UPDATE-004).
+
+    Servies par l'application elle-même plutôt que lues sur GitHub : un
+    serveur Unraid n'a pas toujours accès à Internet, et ce qui compte est
+    ce que fait *cette* version, pas la dernière publiée.
+    """
+    return {"current": __version__, "releases": RELEASES}

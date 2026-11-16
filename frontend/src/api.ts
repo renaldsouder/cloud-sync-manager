@@ -590,3 +590,14 @@ export const completeOAuth = (sessionId: string, redirectUrl: string) =>
 
 export const cancelOAuth = () =>
   request<void>("/api/oauth/cancel", { method: "POST" });
+
+/** Notes de version (UPDATE-004). `version` nul : fusionné, pas encore publié. */
+export type Release = {
+  version: string | null;
+  date: string | null;
+  important: string[];
+  highlights: string[];
+};
+
+export const fetchReleaseNotes = (signal?: AbortSignal) =>
+  request<{ current: string; releases: Release[] }>("/api/release-notes", { signal });
