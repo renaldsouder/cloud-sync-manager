@@ -57,7 +57,11 @@ def list_tasks(
     runner = getattr(request.app.state, "run_manager", None)
     live = {snap["task_id"]: snap for snap in runner.snapshots()} if runner else {}
     return [
-        TaskOut.build(task, live=live.get(task.id))
+        TaskOut.build(
+            task,
+            live=live.get(task.id),
+            retry=runner.pending_retry(task.id) if runner else None,
+        )
         for task in session.scalars(select(Task).order_by(Task.name)).all()
     ]
 
@@ -91,6 +95,7 @@ def create_task(
 def update_task(
     task_id: str,
     payload: TaskUpdate,
+    request: Request,
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings_dep),
 ) -> TaskOut:
@@ -120,6 +125,11 @@ def update_task(
         )
     except service.TaskError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    # SYNC-006 — une nouvelle tentative rejouerait l'ancienne configuration,
+    # ou relancerait une tâche que l'on vient de mettre en pause.
+    runner = getattr(request.app.state, "run_manager", None)
+    if runner is not None:
+        runner.cancel_retry(task.id)
     return TaskOut.build(task)
 
 
@@ -136,6 +146,8 @@ def delete_task(
             status.HTTP_409_CONFLICT,
             "cette tâche est en cours d'exécution : arrêtez-la avant de la supprimer",
         )
+    if runner:
+        runner.cancel_retry(task.id)
     settings = getattr(request.app.state, "settings", None)
     if settings is not None:
         service.forget_workspace(settings, task.id)

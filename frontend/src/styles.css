@@ -658,6 +658,7 @@ body {
 }
 
 .tag--warning,
+.tag--retry,
 .tag--conflict,
 .tag--skip_delete {
   color: var(--accent);
@@ -965,6 +966,11 @@ body {
   padding: 1px 9px;
   margin-right: 6px;
   font-size: 12px;
+}
+
+.chip--warning {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .schedule {

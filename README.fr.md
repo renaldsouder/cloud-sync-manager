@@ -204,6 +204,7 @@ rclone, les journaux et les jeux de filtres appliqués.
 | `CSM_HISTORY_KEEP_RUNS` | `200` | Exécutions conservées par tâche quel que soit leur âge |
 | `CSM_QUARANTINE_RETENTION_DAYS` | `30` | Âge au-delà duquel un lot de corbeille est purgé |
 | `CSM_QUARANTINE_KEEP_RUNS` | `3` | Lots de corbeille toujours conservés, quel que soit leur âge |
+| `CSM_RETRY_DELAYS_MINUTES` | `5,15,45` | Temporisations, en minutes, des nouvelles tentatives après une erreur temporaire (réseau, fournisseur indisponible). Vide : aucune nouvelle tentative |
 | `CSM_SCHEDULER_POLL_SECONDS` | `20` | Battement du planificateur |
 | `TZ` | — | Fuseau du serveur ; les heures de planification s'y réfèrent |
 | `PUID` / `PGID` | `99` / `100` | Propriétaire des fichiers écrits (`nobody:users`) |
@@ -219,6 +220,11 @@ rclone, les journaux et les jeux de filtres appliqués.
 - **Filtres** — règles ordonnées d'inclusion/exclusion par chemin, extension,
   motif de nom, fichiers cachés et taille, avec un outil d'aperçu qui montre
   quelle règle a tranché
+- **Nouvelles tentatives** — après une erreur que rclone qualifie de temporaire
+  (coupure réseau, fournisseur indisponible), la tâche repart d'elle-même après
+  5, 15 puis 45 minutes. Chaque tentative rejoue tous les garde-fous ; une
+  simulation, un bidirectionnel ou une suppression confirmée ne sont jamais
+  rejoués d'eux-mêmes. Une seule notification, si la dernière échoue.
 - **Progression en direct** — fichier courant, débit, temps restant, en SSE
 - **Historique** — résultat, code de sortie, fichiers transférés et supprimés,
   version de rclone, avec rétention configurable

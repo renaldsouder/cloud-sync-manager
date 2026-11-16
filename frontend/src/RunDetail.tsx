@@ -23,6 +23,7 @@ const KIND_LABEL: Record<string, string> = {
   conflict: "Conflits",
   error: "Erreurs",
   warning: "Avertissements",
+  retry: "Nouvelles tentatives",
   other: "Autres",
 };
 
@@ -35,6 +36,7 @@ const KIND_ORDER = [
   "skip_transfer",
   "skip_delete",
   "warning",
+  "retry",
   "other",
 ];
 

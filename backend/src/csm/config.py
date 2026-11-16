@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     history_retention_days: int = 90
     history_keep_runs: int = 200
 
+    #: Nouvelles tentatives après une erreur temporaire (SYNC-006) :
+    #: temporisations en minutes, une par tentative. ``""`` les désactive.
+    #: Chaque tentative rejoue l'intégralité des garde-fous.
+    retry_delays_minutes: str = "5,15,45"
+
     #: Battement du planificateur. Désactivable pour les tests, qui pilotent
     #: leur propre instance avec une horloge fixe.
     scheduler_enabled: bool = True

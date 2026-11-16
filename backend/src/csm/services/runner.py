@@ -23,7 +23,7 @@ import signal
 import subprocess
 import threading
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +58,25 @@ MAX_STORED_EVENTS = 5000
 TRUNCATION_NOTICE = "détail tronqué"
 
 SUPPORTED_MODES = frozenset({"copy", "mirror"})
+
+#: Codes de sortie rclone qui désignent une erreur temporaire (SYNC-006).
+#: rclone réserve le 5 aux erreurs « qu'une nouvelle tentative pourrait
+#: corriger » : coupure réseau, délai dépassé, limitation de débit, erreur
+#: 5xx du fournisseur. Tout autre échec — chemin introuvable, erreur fatale,
+#: configuration refusée — ne se corrige pas en attendant, et le relancer en
+#: boucle masquerait la panne au lieu de la signaler.
+TRANSIENT_EXIT_CODES = frozenset({5})
+
+#: Modes éligibles à la nouvelle tentative automatique. Le bidirectionnel en
+#: est exclu tant qu'aucun fournisseur réel n'a été validé pour ce mode
+#: (§8.6, §20.4) : après un échec, bisync peut exiger une ré-initialisation,
+#: et l'enchaîner tout seul n'est pas un comportement qu'on a pu éprouver.
+RETRYABLE_MODES = frozenset({"copy", "mirror"})
+
+#: Temporisations par défaut entre deux tentatives, en secondes : 5, 15 puis
+#: 45 minutes. Croissantes, pour laisser à une panne de fournisseur le temps
+#: de se résorber sans marteler son API.
+DEFAULT_RETRY_DELAYS: tuple[float, ...] = (300.0, 900.0, 2700.0)
 
 RUN_TO_TASK_STATUS = {
     "needs_resync": "needs_resync",
@@ -164,6 +183,11 @@ class LiveRun:
     started_at: datetime
     resync: bool = False
     log_level: str = settings_store.DEFAULT_LOG_LEVEL
+    #: Rang de la tentative (SYNC-006) : 0 pour le lancement d'origine, 1 pour
+    #: la première nouvelle tentative, etc.
+    attempt: int = 0
+    #: Nouvelle tentative prévue à l'issue de cette exécution, le cas échéant.
+    retry: dict[str, Any] | None = None
     process: subprocess.Popen[str] | None = None
     phase: str = "démarrage"
     status: str = "running"
@@ -192,6 +216,7 @@ class LiveRun:
             "status": self.status,
             "phase": self.phase,
             "started_at": self.started_at.isoformat(),
+            "attempt": self.attempt,
             "current_file": self.current_file,
             "counters": dict(self.counters),
             "stats": dict(self.stats),
@@ -208,6 +233,64 @@ class LiveRun:
                 else None
             ),
         }
+
+
+@dataclass
+class PendingRetry:
+    """Nouvelle tentative programmée après une erreur temporaire (SYNC-006).
+
+    Elle vit en mémoire et ne survit pas à un redémarrage : la planification
+    normale reprend alors la main, avec sa politique de rattrapage (§11).
+    Persister la tentative aurait rejoué au démarrage une exécution décidée
+    dans un contexte qui n'existe plus.
+    """
+
+    run_id: str
+    attempt: int
+    max_attempts: int
+    at: str
+    timer: threading.Timer
+
+    def describe(self) -> dict[str, Any]:
+        return {
+            "attempt": self.attempt,
+            "max_attempts": self.max_attempts,
+            "at": self.at,
+        }
+
+
+def parse_retry_delays(raw: str) -> tuple[float, ...]:
+    """Temporisations en minutes, séparées par des virgules (``"5,15,45"``).
+
+    Une chaîne vide désactive les nouvelles tentatives. Une valeur illisible
+    ou négative lève ``ValueError`` plutôt que d'être ignorée : un réglage
+    mal compris en silence est un réglage qui ne fait pas ce qu'on croit.
+    """
+    delays: list[float] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        minutes = float(part)
+        if minutes < 0:
+            raise ValueError(f"temporisation négative : {part}")
+        delays.append(minutes * 60.0)
+    return tuple(delays)
+
+
+def _describe_delay(seconds: float) -> str:
+    if seconds >= 60:
+        minutes = round(seconds / 60)
+        return f"{minutes} min"
+    return f"{max(1, round(seconds))} s"
+
+
+def _with_attempts(live: LiveRun) -> str | None:
+    """Détail de notification, complété du nombre de tentatives épuisées."""
+    if live.attempt and live.status == "error":
+        suffix = f"échec après {live.attempt + 1} tentatives"
+        return f"{live.last_error} — {suffix}" if live.last_error else suffix
+    return live.last_error
 
 
 def endpoints(task: Task, remote: Remote) -> tuple[str, str]:
@@ -240,6 +323,7 @@ class RunManager:
         filters_dir: Path | None = None,
         bisync_dir: Path | None = None,
         bidirectional_enabled: bool = False,
+        retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS,
     ) -> None:
         self._session_factory = session_factory
         self._adapter = adapter
@@ -250,6 +334,10 @@ class RunManager:
         self._keep_runs = quarantine_keep_runs
         self._runs: dict[str, LiveRun] = {}
         self._lock = threading.Lock()
+        self._retry_delays = tuple(float(delay) for delay in retry_delays)
+        #: Nouvelles tentatives en attente, par tâche (SYNC-006).
+        self._retries: dict[str, PendingRetry] = {}
+        self._closed = False
 
     # -- lecture ------------------------------------------------------------
 
@@ -277,6 +365,26 @@ class RunManager:
         """
         with self._lock:
             self._runs.pop(run_id, None)
+
+    def pending_retry(self, task_id: str) -> dict[str, Any] | None:
+        """Nouvelle tentative prévue pour cette tâche, telle qu'affichable."""
+        with self._lock:
+            pending = self._retries.get(task_id)
+            return pending.describe() if pending else None
+
+    def cancel_retry(self, task_id: str) -> bool:
+        """Annule la nouvelle tentative prévue pour une tâche, s'il y en a une.
+
+        Appelé quand une autre exécution prend le relais, quand la tâche est
+        mise en pause, modifiée ou supprimée : une tentative ne doit jamais
+        rejouer une configuration que l'utilisateur vient de changer.
+        """
+        with self._lock:
+            pending = self._retries.pop(task_id, None)
+        if pending is None:
+            return False
+        pending.timer.cancel()
+        return True
 
     def live_runs(self) -> list[LiveRun]:
         with self._lock:
@@ -331,9 +439,13 @@ class RunManager:
         dry_run: bool,
         confirm_deletions: bool = False,
         resync: bool = False,
+        attempt: int = 0,
     ) -> str:
         if self.is_running(task_id):
             raise RunError("cette tâche est déjà en cours d'exécution")
+        # Toute exécution, manuelle ou planifiée, rend caduque une nouvelle
+        # tentative en attente : c'est elle désormais qui fait foi.
+        self.cancel_retry(task_id)
 
         session = self._session_factory()
         try:
@@ -403,6 +515,13 @@ class RunManager:
                 started_at=datetime.now(timezone.utc),
                 resync=resync,
                 log_level=verbosity,
+                attempt=attempt,
+            )
+            retry_eligible = (
+                not dry_run
+                and not resync
+                and not confirm_deletions
+                and task.mode in RETRYABLE_MODES
             )
         finally:
             session.close()
@@ -412,7 +531,7 @@ class RunManager:
 
         threading.Thread(
             target=self._execute,
-            args=(live, plan),
+            args=(live, plan, retry_eligible),
             name=f"csm-run-{live.run_id[:8]}",
             daemon=True,
         ).start()
@@ -434,12 +553,21 @@ class RunManager:
         return _terminate(process, grace)
 
     def stop_all(self) -> None:
+        # Plus aucune tentative ne doit partir d'une application qui s'arrête.
+        with self._lock:
+            self._closed = True
+            pending = list(self._retries.values())
+            self._retries.clear()
+        for retry in pending:
+            retry.timer.cancel()
         for run in self.live_runs():
             self.stop(run.run_id, grace=5.0)
 
     # -- déroulé ------------------------------------------------------------
 
-    def _execute(self, live: LiveRun, plan: RunPlan) -> None:
+    def _execute(
+        self, live: LiveRun, plan: RunPlan, retry_eligible: bool = False
+    ) -> None:
         session = self._session_factory()
         try:
             # Un côté vide est anormal — sauf à la toute première mise en
@@ -529,14 +657,35 @@ class RunManager:
 
             live.phase = "transfert"
             exit_code = self._pump(live, session, self._arguments(live, plan))
+            if retry_eligible:
+                live.retry = self._plan_retry(live, exit_code)
             self._finalise(live, exit_code, session)
 
             if plan.destructive and live.status in {"success", "warning"}:
                 live.phase = "purge de la quarantaine"
                 self._purge_quarantine(live, plan, session)
 
+            timer: threading.Timer | None = None
+            if live.retry is not None:
+                session.add(
+                    TaskEvent(
+                        run_id=live.run_id,
+                        kind="retry",
+                        message=live.retry["message"],
+                    )
+                )
+                # Inscrite avant la validation, pour que l'interface qui lit
+                # l'échec voie aussi la tentative prévue ; armée après, pour
+                # qu'elle ne parte jamais sur un état pas encore écrit.
+                timer = self._register_retry(live)
             session.commit()
-            self._notify(live, live.status, live.last_error)
+            if timer is not None:
+                # L'alerte attendra l'issue des tentatives : une coupure de
+                # quelques minutes résorbée toute seule ne mérite pas une
+                # notification. Si la dernière échoue, elle, notifie.
+                timer.start()
+            else:
+                self._notify(live, live.status, _with_attempts(live))
         except Exception:  # pragma: no cover - filet de sécurité du fil
             logger.exception("exécution %s interrompue par une erreur interne", live.run_id)
             session.rollback()
@@ -544,6 +693,91 @@ class RunManager:
         finally:
             session.close()
             self._forget(live.run_id)
+
+    # -- nouvelles tentatives (SYNC-006) ------------------------------------
+
+    def _plan_retry(self, live: LiveRun, exit_code: int | None) -> dict[str, Any] | None:
+        """Décide si l'échec qui vient de se produire mérite une nouvelle tentative.
+
+        Seule une erreur que rclone qualifie lui-même de temporaire y a droit,
+        et jamais une exécution arrêtée par l'utilisateur. La tentative rejoue
+        *tout* le déroulé — contrôle de la source, simulation, seuil : elle ne
+        bénéficie d'aucune des décisions de l'exécution qu'elle remplace.
+        """
+        if live.cancelled or exit_code not in TRANSIENT_EXIT_CODES:
+            return None
+        if live.attempt >= len(self._retry_delays):
+            return None
+        with self._lock:
+            if self._closed:
+                return None
+        delay = self._retry_delays[live.attempt]
+        attempt = live.attempt + 1
+        due = datetime.now(timezone.utc) + timedelta(seconds=delay)
+        return {
+            "attempt": attempt,
+            "max_attempts": len(self._retry_delays),
+            "at": due.isoformat(),
+            "delay_seconds": delay,
+            "message": (
+                f"erreur temporaire : nouvelle tentative {attempt}/"
+                f"{len(self._retry_delays)} dans {_describe_delay(delay)}"
+            ),
+        }
+
+    def _register_retry(self, live: LiveRun) -> threading.Timer | None:
+        """Inscrit la tentative et renvoie son minuteur, à armer par l'appelant."""
+        retry = live.retry
+        assert retry is not None
+        timer = threading.Timer(
+            retry["delay_seconds"],
+            self._fire_retry,
+            args=(live.task_id, live.run_id, retry["attempt"]),
+        )
+        timer.daemon = True
+        timer.name = f"csm-retry-{live.task_id[:8]}"
+        with self._lock:
+            if self._closed:
+                return None
+            previous = self._retries.pop(live.task_id, None)
+            self._retries[live.task_id] = PendingRetry(
+                run_id=live.run_id,
+                attempt=retry["attempt"],
+                max_attempts=retry["max_attempts"],
+                at=retry["at"],
+                timer=timer,
+            )
+        if previous is not None:  # pragma: no cover - une seule à la fois
+            previous.timer.cancel()
+        return timer
+
+    def _fire_retry(self, task_id: str, failed_run_id: str, attempt: int) -> None:
+        """Relance la tâche si rien n'a changé depuis l'échec.
+
+        La tentative est abandonnée si la tâche a disparu, a été mise en
+        pause, ou si une autre exécution a eu lieu entre-temps : rejouer une
+        configuration que l'utilisateur a touchée, ou doubler une exécution
+        qui a déjà réussi, serait pire que de ne rien faire.
+        """
+        with self._lock:
+            pending = self._retries.get(task_id)
+            if pending is None or pending.run_id != failed_run_id or self._closed:
+                return
+            del self._retries[task_id]
+
+        session = self._session_factory()
+        try:
+            task = session.get(Task, task_id)
+            if task is None or not task.enabled or task.last_run_id != failed_run_id:
+                logger.info("nouvelle tentative abandonnée pour %s", task_id)
+                return
+        finally:
+            session.close()
+
+        try:
+            self.start(task_id, dry_run=False, attempt=attempt)
+        except RunError as exc:
+            logger.warning("nouvelle tentative impossible pour %s : %s", task_id, exc)
 
     # -- bidirectionnel -----------------------------------------------------
 
@@ -1118,7 +1352,12 @@ def _summary_json(live: LiveRun) -> str:
         "counters": live.counters,
         "last_error": live.last_error,
         "log_level": live.log_level,
+        "attempt": live.attempt,
     }
+    if live.retry is not None:
+        payload["retry"] = {
+            key: live.retry[key] for key in ("attempt", "max_attempts", "at")
+        }
     if live.deletion_plan is not None:
         payload["deletion_plan"] = {
             "deletes": live.deletion_plan.deletes,

@@ -32,7 +32,11 @@ from csm.rclone.adapter import RcloneAdapter, RcloneUnavailable
 from csm.api.auth import PASSWORD_KEY
 from csm.services import auth as csm_auth
 from csm.services import settings_store
-from csm.services.runner import RunManager, mark_orphan_runs_interrupted
+from csm.services.runner import (
+    RunManager,
+    mark_orphan_runs_interrupted,
+    parse_retry_delays,
+)
 from csm.services.scheduler import Scheduler
 
 logger = logging.getLogger("csm")
@@ -115,7 +119,26 @@ def _build_run_manager(app: FastAPI, settings: Settings) -> RunManager | None:
         # ré-initialisation, donc une fusion des deux côtés.
         bisync_dir=settings.config_dir / "bisync",
         bidirectional_enabled=settings.bidirectional_enabled,
+        retry_delays=_retry_delays(settings),
     )
+
+
+def _retry_delays(settings: Settings) -> tuple[float, ...]:
+    """Temporisations des nouvelles tentatives (SYNC-006).
+
+    Un réglage illisible désactive les tentatives plutôt que d'empêcher le
+    démarrage : s'abstenir de relancer est le côté sûr, et l'erreur reste
+    visible dans le journal du conteneur.
+    """
+    try:
+        return parse_retry_delays(settings.retry_delays_minutes)
+    except ValueError as exc:
+        logger.error(
+            "CSM_RETRY_DELAYS_MINUTES illisible (%s) : nouvelles tentatives "
+            "désactivées",
+            exc,
+        )
+        return ()
 
 
 def _build_scheduler(app: FastAPI, settings: Settings) -> Scheduler | None:
