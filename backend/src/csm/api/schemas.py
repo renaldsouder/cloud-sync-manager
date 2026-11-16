@@ -321,3 +321,21 @@ class DashboardOut(BaseModel):
     throughput_bytes_per_second: float = 0.0
     running: list[dict[str, Any]] = Field(default_factory=list)
     recent_runs: list[RunOut] = Field(default_factory=list)
+
+
+class OneShotCopyIn(BaseModel):
+    """Copie ponctuelle (SYNC-008). Pas de champ ``mode`` : c'est toujours
+    une Copie, et ``extra="forbid"`` refuse qu'on tente d'en glisser un."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    remote_id: str
+    local_path: str
+    remote_path: str = ""
+    direction: str = "local_to_remote"
+    dry_run: bool = False
+
+
+class OneShotCopyOut(BaseModel):
+    task: TaskOut
+    run: RunOut | None = None

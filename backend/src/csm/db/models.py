@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    false,
     Boolean,
     DateTime,
     ForeignKey,
@@ -145,6 +146,11 @@ class Task(TimestampMixin, Base):
     bisync_json: Mapped[str | None] = mapped_column(Text)
 
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    #: Copie ponctuelle (SYNC-008) : toujours une Copie, jamais planifiée,
+    #: absente de la liste des tâches permanentes.
+    one_shot: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
+    )
     #: État courant : Prête, Planifiée, En cours, En pause, Réussie,
     #: Avertissement, Erreur, Bloquée (§10.2).
     status: Mapped[str] = mapped_column(String(32), default="ready")

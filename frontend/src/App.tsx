@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import DashboardView from "./DashboardView";
 import HelpView from "./HelpView";
 import LoginView from "./LoginView";
+import OneShotCopy from "./OneShotCopy";
 import ReleaseNotes, { UpdateBanner } from "./ReleaseNotes";
 import RemotesView from "./RemotesView";
 import SettingsView from "./SettingsView";
@@ -150,7 +151,10 @@ export default function App() {
           <DashboardView />
         )
       ) : tab === "taches" ? (
-        <TasksView bidirectional={health?.features?.bidirectional ?? false} />
+        <>
+          <TasksView bidirectional={health?.features?.bidirectional ?? false} />
+          <OneShotCopy />
+        </>
       ) : tab === "stockages" ? (
         <RemotesView />
       ) : tab === "parametres" ? (

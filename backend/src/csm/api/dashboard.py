@@ -26,7 +26,7 @@ COUNTED_STATUSES = ("scheduled", "running", "warning", "error", "blocked", "paus
 def dashboard(
     request: Request, session: Session = Depends(get_session)
 ) -> DashboardOut:
-    tasks = list(session.scalars(select(Task)).all())
+    tasks = list(session.scalars(select(Task).where(Task.one_shot.is_(False))).all())
 
     counters = DashboardCounters(total=len(tasks))
     for task in tasks:

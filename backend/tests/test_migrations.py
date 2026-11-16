@@ -104,3 +104,55 @@ def test_0002_survives_a_roundtrip(tmp_path: Path) -> None:
     downgrade_to(url, "0001")
     upgrade_to_head(url)
     assert "bisync_json" in _task_columns(db_path)
+
+
+def test_0003_adds_one_shot_and_keeps_existing_tasks_permanent(tmp_path: Path) -> None:
+    """SYNC-008 — une tâche créée avant la migration reste une tâche
+    permanente : elle ne doit pas disparaître de la liste."""
+    from sqlalchemy import text
+
+    db_path = tmp_path / "csm.sqlite"
+    url = sqlite_url(db_path)
+    upgrade_to_head(url)
+    downgrade_to(url, "0002")
+
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO remotes (id, name, provider, rclone_remote_name, status, "
+                    "created_at, updated_at) VALUES ('r', 'R', 'alias', 'R', 'ok', "
+                    "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO tasks (id, name, remote_id, local_path, remote_path, "
+                    "direction, mode, delete_policy, quarantine_enabled, "
+                    "dry_run_required, enabled, status, created_at, updated_at) "
+                    "VALUES ('t', 'T', 'r', '/mnt/user/a', '', 'local_to_remote', "
+                    "'mirror', 'confirm', 1, 1, 1, 'ready', CURRENT_TIMESTAMP, "
+                    "CURRENT_TIMESTAMP)"
+                )
+            )
+    finally:
+        engine.dispose()
+
+    upgrade_to_head(url)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT one_shot FROM tasks")).scalar() == 0
+    finally:
+        engine.dispose()
+
+
+def test_0003_can_be_rolled_back(tmp_path: Path) -> None:
+    db_path = tmp_path / "csm.sqlite"
+    url = sqlite_url(db_path)
+    upgrade_to_head(url)
+    downgrade_to(url, "0002")
+    assert "one_shot" not in _task_columns(db_path)
+    upgrade_to_head(url)
+    assert "one_shot" in _task_columns(db_path)

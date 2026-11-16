@@ -326,6 +326,21 @@ export const runTask = (
     }),
   });
 
+/** Copie ponctuelle (SYNC-008) : toujours une Copie, jamais une suppression. */
+export type OneShotCopy = { task: Task; run: Run | null };
+
+export const startOneShotCopy = (body: {
+  remote_id: string;
+  local_path: string;
+  remote_path: string;
+  direction: string;
+  dry_run: boolean;
+}) =>
+  request<Run>("/api/one-shot-copies", { method: "POST", body: JSON.stringify(body) });
+
+export const fetchOneShotCopies = (signal?: AbortSignal) =>
+  request<OneShotCopy[]>("/api/one-shot-copies", { signal });
+
 export type TaskEvent = {
   id: number;
   kind: string;

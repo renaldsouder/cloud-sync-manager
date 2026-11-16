@@ -15,6 +15,8 @@ from csm.api.deps import get_session, get_settings_dep
 from csm.api.schemas import (
     BisyncSettingsIn,
     BisyncSettingsOut,
+    OneShotCopyIn,
+    OneShotCopyOut,
     RunOut,
     TaskCreate,
     TaskEventOut,
@@ -62,7 +64,9 @@ def list_tasks(
             live=live.get(task.id),
             retry=runner.pending_retry(task.id) if runner else None,
         )
-        for task in session.scalars(select(Task).order_by(Task.name)).all()
+        for task in session.scalars(
+            select(Task).where(Task.one_shot.is_(False)).order_by(Task.name)
+        ).all()
     ]
 
 
@@ -375,3 +379,72 @@ async def stream_runs(request: Request) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# -- copies ponctuelles (SYNC-008) -------------------------------------------
+
+
+@router.post(
+    "/one-shot-copies", response_model=RunOut, status_code=status.HTTP_202_ACCEPTED
+)
+def start_one_shot_copy(
+    payload: OneShotCopyIn,
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings_dep),
+    runner: RunManager = Depends(get_runner),
+) -> RunOut:
+    """Lance une Copie unique, sans créer de tâche permanente."""
+    try:
+        task = service.create_one_shot(
+            session,
+            settings,
+            remote_id=payload.remote_id,
+            local_path=payload.local_path,
+            remote_path=payload.remote_path,
+            direction=payload.direction,
+        )
+    except service.TaskError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    session.commit()
+
+    try:
+        run_id = runner.start(task.id, dry_run=payload.dry_run)
+    except RunError as exc:
+        # Une copie qui n'a pas pu partir ne doit pas laisser de trace vide.
+        session.delete(task)
+        session.commit()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+    session.expire_all()
+    run = session.get(TaskRun, run_id)
+    if run is None:  # pragma: no cover - la transaction du runner a échoué
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "exécution non créée")
+    return RunOut.build(run, live=runner.get(run_id))
+
+
+@router.get("/one-shot-copies", response_model=list[OneShotCopyOut])
+def list_one_shot_copies(
+    request: Request, session: Session = Depends(get_session)
+) -> list[OneShotCopyOut]:
+    """Copies ponctuelles récentes, la plus récente d'abord."""
+    runner = getattr(request.app.state, "run_manager", None)
+    copies = session.scalars(
+        select(Task)
+        .where(Task.one_shot.is_(True))
+        .order_by(Task.created_at.desc())
+        .limit(20)
+    ).all()
+    result: list[OneShotCopyOut] = []
+    for task in copies:
+        run = session.get(TaskRun, task.last_run_id) if task.last_run_id else None
+        result.append(
+            OneShotCopyOut(
+                task=TaskOut.build(task),
+                run=(
+                    RunOut.build(run, live=runner.get(run.id) if runner else None)
+                    if run
+                    else None
+                ),
+            )
+        )
+    return result

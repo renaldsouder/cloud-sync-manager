@@ -36,6 +36,9 @@ RELEASES: list[dict[str, Any]] = [
             "simultanés, limite de bande passante, y compris selon l'heure.",
             "Planification : plage horaire exclue, et expression cron en mode "
             "avancé.",
+            "Copie ponctuelle, dans l'onglet Tâches : copier un dossier une "
+            "fois, sans créer de tâche. Toujours une Copie, jamais de "
+            "suppression.",
             "Paramètres → Diagnostic : un fichier anonymisé à joindre à une "
             "demande d'aide, sans aucun identifiant.",
             "Aide : une section Dépannage, par symptôme.",
