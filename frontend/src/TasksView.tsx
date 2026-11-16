@@ -23,6 +23,8 @@ import {
 
 const STATUS_LABEL: Record<string, string> = {
   ready: "Prête",
+  scheduled: "Planifiée",
+  paused: "En pause",
   running: "En cours",
   success: "Réussie",
   warning: "Avertissement",
