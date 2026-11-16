@@ -137,6 +137,10 @@ body {
   gap: 4px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--line);
+  /* UI-007 — sur un téléphone, les six onglets ne tiennent pas : ils
+     défilent latéralement plutôt que d'élargir toute la page. */
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .tab {
@@ -149,6 +153,8 @@ body {
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .tab--active {
@@ -335,13 +341,15 @@ body {
 
 .remote__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
   font-size: 14px;
 }
 
 .remote__name {
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .remote__provider {
@@ -1127,4 +1135,61 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0 16px;
+}
+
+/* --- Écrans étroits (UI-007) ----------------------------------------------
+   Priorité au bureau Unraid (§10.4), mais une alerte reçue sur un téléphone
+   doit pouvoir se traiter depuis le téléphone : lire pourquoi une tâche est
+   bloquée, valider ou relancer, sans zoomer ni défiler de côté. */
+
+@media (max-width: 600px) {
+  .shell {
+    padding: 20px 12px 48px;
+  }
+
+  .shell__header h1 {
+    font-size: 21px;
+  }
+
+  .shell__subtitle {
+    margin-bottom: 18px;
+  }
+
+  /* Les six onglets passent sur deux lignes : un défilement latéral en
+     cacherait la moitié sans que rien ne le signale. */
+  .tabs {
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .card {
+    padding: 16px 14px;
+  }
+
+  .card__head {
+    flex-wrap: wrap;
+  }
+
+  /* Le nom d'une tâche prend toute la ligne ; sens, mode et état passent
+     dessous au lieu de l'écraser sur trois lignes. */
+  .remote__name {
+    flex: 1 0 100%;
+    order: -1;
+  }
+
+  .remote__status {
+    margin-left: 0;
+  }
+
+  .path code {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Écran tactile : des cibles assez grandes pour un doigt. */
+@media (pointer: coarse) {
+  .tab,
+  .btn {
+    min-height: 40px;
+  }
 }
