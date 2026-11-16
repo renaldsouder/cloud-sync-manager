@@ -226,7 +226,8 @@ rclone, les journaux et les jeux de filtres appliqués.
   simulation, un bidirectionnel ou une suppression confirmée ne sont jamais
   rejoués d'eux-mêmes. Une seule notification, si la dernière échoue.
 - **Réglages de transfert** — par tâche : transferts et vérifications
-  simultanés, limite de bande passante (montante et descendante), et
+  simultanés, limite de bande passante (montante et descendante, éventuellement
+  variable selon l'heure), et
   comparaison par somme de contrôle. Celle-ci n'est appliquée que si les deux
   côtés partagent un algorithme ; sinon rclone ne comparerait plus que la
   taille, et l'exécution revient à la taille et à la date en le signalant.

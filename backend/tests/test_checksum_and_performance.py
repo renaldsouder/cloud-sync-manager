@@ -38,6 +38,40 @@ def test_valid_settings_are_kept() -> None:
     assert normalise({"limit": " 500k "}) == {"limit": "500k"}
 
 
+def test_a_bandwidth_timetable_is_accepted() -> None:
+    """PERF-003 — brider en journée, libérer la nuit."""
+    assert normalise({"limit": "08:00,512k   19:00,10M:1M 23:30,off"}) == {
+        "limit": "08:00,512k 19:00,10M:1M 23:30,off"
+    }
+    assert normalise({"limit": "Mon-08:00,1M Sat-00:00,off"}) == {
+        "limit": "Mon-08:00,1M Sat-00:00,off"
+    }
+
+
+@pytest.mark.parametrize(
+    "limit",
+    ["25:00,1M", "08:00,1M --max-delete 0", "Lun-08:00,1M", "08:00,1M,", "08:00,1M 9:00,2M"],
+)
+def test_an_unreadable_timetable_is_refused(limit: str) -> None:
+    with pytest.raises(PerformanceError):
+        normalise({"limit": limit})
+
+
+def test_rclone_accepts_the_timetables_we_accept(rclone_path: str, tmp_path: Path) -> None:
+    """La validation ne vaut que si rclone comprend ce qu'elle laisse passer."""
+    source = tmp_path / "a"
+    source.mkdir()
+    (source / "f.txt").write_text("f", encoding="utf-8")
+    for limit in ("08:00,512k 19:00,10M:1M 23:30,off", "Mon-08:00,1M Sat-00:00,off"):
+        completed = subprocess.run(
+            [rclone_path, "copy", str(source), str(tmp_path / "b"), "--bwlimit", limit],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+
+
 def test_empty_settings_collapse_to_nothing() -> None:
     """Un formulaire vidé doit revenir aux défauts de rclone, pas stocker
     une série de champs vides."""

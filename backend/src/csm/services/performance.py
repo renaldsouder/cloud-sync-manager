@@ -7,7 +7,8 @@ opposition à *quoi* et *où* :
 - ``transfers`` — transferts simultanés (PERF-001) ;
 - ``checkers`` — vérifications simultanées (§13) ;
 - ``limit`` — bande passante, au format rclone : ``10M``, ``500k``, ou
-  ``2M:1M`` pour montant:descendant (PERF-002) ;
+  ``2M:1M`` pour montant:descendant (PERF-002), ou une grille horaire
+  ``08:00,512k 23:00,off`` (PERF-003) ;
 - ``checksum`` — comparer par somme de contrôle plutôt que par taille et
   date (SYNC-005).
 
@@ -29,7 +30,15 @@ MAX_PARALLEL = 64
 #: Une valeur de bande passante rclone : nombre, suffixe d'unité facultatif,
 #: et éventuellement une seconde valeur pour le sens descendant.
 _RATE = r"(?:\d+(?:\.\d+)?[BbKkMmGgTtPp]?|off)"
-_LIMIT = re.compile(rf"^{_RATE}(?::{_RATE})?$")
+_PAIR = rf"{_RATE}(?::{_RATE})?"
+_LIMIT = re.compile(rf"^{_PAIR}$")
+
+#: Limite selon les horaires (PERF-003) : le format natif de rclone,
+#: ``08:00,512k 19:00,10M 23:00,off``, éventuellement préfixé d'un jour
+#: (``Mon-08:00,512k``). L'heure est celle du conteneur, donc la variable
+#: ``TZ`` du template — la même que celle de la planification.
+_DAYS = r"(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)"
+_SLOT = re.compile(rf"^(?:{_DAYS}-)?([01]\d|2[0-3]):([0-5]\d),{_PAIR}$")
 
 KNOWN_KEYS = frozenset({"transfers", "checkers", "limit", "checksum"})
 
@@ -69,11 +78,12 @@ def normalise(payload: dict[str, Any] | None) -> dict[str, Any] | None:
 
     limit = payload.get("limit")
     if limit not in (None, ""):
-        text = str(limit).strip()
-        if not _LIMIT.match(text):
+        text = " ".join(str(limit).split())
+        if not is_valid_limit(text):
             raise PerformanceError(
                 "limite de bande passante illisible : par exemple 10M, 500k, "
-                "ou 2M:1M pour montant:descendant"
+                "2M:1M pour montant:descendant, ou « 08:00,1M 23:00,off » "
+                "pour varier selon l'heure"
             )
         cleaned["limit"] = text
 
@@ -102,11 +112,23 @@ def lenient(payload: Any) -> dict[str, Any]:
         if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= MAX_PARALLEL:
             settings[key] = value
     limit = payload.get("limit")
-    if isinstance(limit, str) and _LIMIT.match(limit.strip()):
-        settings["limit"] = limit.strip()
+    if isinstance(limit, str) and is_valid_limit(" ".join(limit.split())):
+        settings["limit"] = " ".join(limit.split())
     if payload.get("checksum") is True:
         settings["checksum"] = True
     return settings
+
+
+def is_valid_limit(text: str) -> bool:
+    """Débit fixe, ou grille horaire (PERF-003).
+
+    Rien d'autre ne passe : la valeur devient un argument de rclone, et un
+    texte qui ne serait ni l'un ni l'autre pourrait y glisser une option.
+    """
+    if _LIMIT.match(text):
+        return True
+    slots = text.split(" ")
+    return bool(slots) and all(_SLOT.match(slot) for slot in slots)
 
 
 def common_hashes(first: list[str] | None, second: list[str] | None) -> list[str]:
