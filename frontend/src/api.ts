@@ -245,6 +245,14 @@ export type Task = {
   schedule: Schedule | null;
   schedule_label: string;
   live: LiveRun | null;
+  /** Nouvelle tentative prévue après une erreur temporaire (SYNC-006). */
+  retry: PendingRetry | null;
+};
+
+export type PendingRetry = {
+  attempt: number;
+  max_attempts: number;
+  at: string;
 };
 
 export type Schedule = {

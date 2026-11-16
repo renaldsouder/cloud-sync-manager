@@ -339,6 +339,14 @@ export default function TasksView({ bidirectional = false }: Props) {
                 {task.next_run_at && (
                   <span className="chip">prochaine : {formatDate(task.next_run_at)}</span>
                 )}
+                {task.retry && !running && (
+                  // Sans ce rappel, une tâche en erreur semble attendre une
+                  // intervention alors qu'elle va repartir d'elle-même.
+                  <span className="chip chip--warning">
+                    nouvelle tentative {task.retry.attempt}/{task.retry.max_attempts} à{" "}
+                    {formatDate(task.retry.at)}
+                  </span>
+                )}
               </p>
 
               <p className="path">

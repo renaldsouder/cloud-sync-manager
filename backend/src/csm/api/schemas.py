@@ -198,9 +198,17 @@ class TaskOut(BaseModel):
     filter_set_id: str | None = None
     bandwidth: dict[str, Any] | None = None
     live: dict[str, Any] | None = None
+    #: Nouvelle tentative prévue après une erreur temporaire (SYNC-006).
+    retry: dict[str, Any] | None = None
 
     @classmethod
-    def build(cls, task: Any, *, live: dict[str, Any] | None = None) -> "TaskOut":
+    def build(
+        cls,
+        task: Any,
+        *,
+        live: dict[str, Any] | None = None,
+        retry: dict[str, Any] | None = None,
+    ) -> "TaskOut":
         schedule = Schedule.parse(task.schedule_json)
         return cls(
             id=task.id,
@@ -226,6 +234,7 @@ class TaskOut(BaseModel):
                 json.loads(task.bandwidth_json) if task.bandwidth_json else None
             ),
             live=live,
+            retry=retry,
         )
 
 

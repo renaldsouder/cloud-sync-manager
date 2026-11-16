@@ -193,6 +193,7 @@ configuration, the logs and the applied filter sets.
 | `CSM_HISTORY_KEEP_RUNS` | `200` | Runs kept per task regardless of age |
 | `CSM_QUARANTINE_RETENTION_DAYS` | `30` | Age past which a trash batch is purged |
 | `CSM_QUARANTINE_KEEP_RUNS` | `3` | Trash batches always kept, regardless of age |
+| `CSM_RETRY_DELAYS_MINUTES` | `5,15,45` | Delays, in minutes, between automatic retries after a temporary error (network, provider unavailable). Empty: no retry |
 | `CSM_SCHEDULER_POLL_SECONDS` | `20` | Scheduler heartbeat |
 | `TZ` | — | Server timezone; schedule times refer to it |
 | `PUID` / `PGID` | `99` / `100` | Owner of written files (`nobody:users`) |
@@ -206,6 +207,11 @@ configuration, the logs and the applied filter sets.
   No cron expression. Explicit catch-up policy after a server restart.
 - **Filters** — ordered include/exclude rules by path, extension, name pattern,
   hidden files and size, with a preview tool that shows which rule decided
+- **Retries** — after an error rclone itself calls temporary (network drop,
+  provider unavailable), the task restarts on its own after 5, 15 then 45
+  minutes. Each retry replays every guard; a simulation, a bidirectional run or
+  a confirmed deletion is never replayed on its own. One notification, only if
+  the last attempt fails.
 - **Live progress** — current file, throughput, ETA, over SSE
 - **History** — per-run result, exit code, transferred and deleted files, rclone
   version, with configurable retention
