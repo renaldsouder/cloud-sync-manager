@@ -1193,3 +1193,41 @@ body {
     min-height: 40px;
   }
 }
+
+/* --- Notes de version (UPDATE-004) ----------------------------------------- */
+
+.notes h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.notes__release {
+  margin-bottom: 16px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.notes__release ul {
+  margin: 0 0 6px;
+  padding-left: 20px;
+}
+
+/* Ce qui touche à la protection des données passe avant le confort. */
+.notes__important li {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 14px;
+}

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import DashboardView from "./DashboardView";
 import HelpView from "./HelpView";
 import LoginView from "./LoginView";
+import ReleaseNotes, { UpdateBanner } from "./ReleaseNotes";
 import RemotesView from "./RemotesView";
 import SettingsView from "./SettingsView";
 import TasksView from "./TasksView";
@@ -136,6 +137,8 @@ export default function App() {
         </div>
       )}
 
+      <UpdateBanner version={health?.version} onVoir={() => setTab("etat")} />
+
       {tab === "bord" ? (
         accueil && !accueil.dismissed && !accueil.completed ? (
           <WelcomeView
@@ -155,33 +158,36 @@ export default function App() {
       ) : tab === "aide" ? (
         <HelpView bidirectional={health?.features?.bidirectional ?? false} />
       ) : (
-        <section className="card">
-          <h2>État du service</h2>
+        <>
+          <section className="card">
+            <h2>État du service</h2>
 
-          {error && (
-            <p className="state state--error">Contact impossible avec l'API : {error}</p>
-          )}
-          {!health && !error && <p className="state">Interrogation en cours…</p>}
+            {error && (
+              <p className="state state--error">Contact impossible avec l'API : {error}</p>
+            )}
+            {!health && !error && <p className="state">Interrogation en cours…</p>}
 
-          {health && (
-            <ul className="checks">
-              {Object.entries(health.checks).map(([key, check]) => (
-                <li key={key} className="checks__item">
-                  <span
-                    className={`dot ${check.ok ? "dot--ok" : "dot--error"}`}
-                    aria-hidden="true"
-                  />
-                  <span className="checks__label">{LABELS[key] ?? key}</span>
-                  <span className="checks__value">
-                    {check.ok
-                      ? (check.version ?? "disponible")
-                      : (check.detail ?? "indisponible")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+            {health && (
+              <ul className="checks">
+                {Object.entries(health.checks).map(([key, check]) => (
+                  <li key={key} className="checks__item">
+                    <span
+                      className={`dot ${check.ok ? "dot--ok" : "dot--error"}`}
+                      aria-hidden="true"
+                    />
+                    <span className="checks__label">{LABELS[key] ?? key}</span>
+                    <span className="checks__value">
+                      {check.ok
+                        ? (check.version ?? "disponible")
+                        : (check.detail ?? "indisponible")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <ReleaseNotes />
+        </>
       )}
 
       <footer className="shell__footer">
