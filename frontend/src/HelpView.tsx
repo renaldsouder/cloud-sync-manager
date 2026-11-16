@@ -278,10 +278,12 @@ export function AideDepannage() {
         </p>
         <p>
           Onglet <strong>Stockages Cloud</strong>, <strong>Tester</strong> : un
-          échec d'authentification le confirme. L'interface ne sait pas encore
-          renouveler l'autorisation d'un stockage existant ; il faut aujourd'hui
-          ajouter de nouveau le stockage, puis recréer les tâches qui s'en
-          servent.
+          échec d'authentification le confirme. Cliquez alors sur{" "}
+          <strong>Ré-autoriser</strong> et reconnectez-vous{" "}
+          <strong>avec le même compte</strong> : seul le jeton est remplacé, les
+          tâches restent en place. Par prudence, un Miroir ou un Bidirectionnel
+          qui utilise ce stockage devra de nouveau être simulé avant de
+          s'exécuter.
         </p>
       </Repli>
 

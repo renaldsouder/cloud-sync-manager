@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 
+import OAuthPanel from "./OAuthPanel";
 import RemoteWizard from "./RemoteWizard";
 import {
   completeRemote,
   deleteRemote,
   fetchRemotes,
   formatBytes,
+  reauthorizeRemote,
   testRemote,
   type Remote,
   type RemoteTest,
 } from "./api";
+
+/** Fournisseurs dont l'accès passe par un jeton OAuth (CLOUD-003). */
+const OAUTH = new Set(["drive", "onedrive", "dropbox"]);
 
 const STATUS_LABEL: Record<Remote["status"], string> = {
   ok: "Accessible",
@@ -23,6 +28,8 @@ export default function RemotesView() {
   const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, RemoteTest>>({});
+  const [reauth, setReauth] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Record<string, string>>({});
 
   const reload = useCallback(async () => {
     try {
@@ -55,6 +62,29 @@ export default function RemotesView() {
     setError(null);
     try {
       await action();
+      await reload();
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function reauthorize(remote: Remote, options: Record<string, string>) {
+    setBusyId(remote.id);
+    setError(null);
+    try {
+      const done = await reauthorizeRemote(remote.id, options);
+      setReauth(null);
+      const rearmees = done.simulation_required;
+      setNotice((previous) => ({
+        ...previous,
+        [remote.id]:
+          "Accès ré-autorisé. Testez le stockage pour le confirmer." +
+          (rearmees.length > 0
+            ? ` Par prudence, ces tâches devront d'abord être simulées : ${rearmees.join(", ")}.`
+            : ""),
+      }));
       await reload();
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -146,7 +176,35 @@ export default function RemotesView() {
                 </p>
               )}
 
+              {notice[remote.id] && <p className="state">{notice[remote.id]}</p>}
+
+              {reauth === remote.id && (
+                <>
+                  <p className="field__help">
+                    Pour un jeton expiré ou révoqué. Connectez-vous avec{" "}
+                    <strong>le même compte</strong> : seul le jeton est remplacé, les
+                    tâches qui utilisent ce stockage restent en place.
+                  </p>
+                  <OAuthPanel
+                    existing
+                    provider={remote.provider}
+                    label={remote.name}
+                    onAuthorized={(options) => void reauthorize(remote, options)}
+                  />
+                </>
+              )}
+
               <div className="actions">
+                {OAUTH.has(remote.provider) && (
+                  <button
+                    type="button"
+                    className="btn btn--small btn--ghost"
+                    disabled={busyId === remote.id}
+                    onClick={() => setReauth(reauth === remote.id ? null : remote.id)}
+                  >
+                    {reauth === remote.id ? "Annuler la ré-autorisation" : "Ré-autoriser"}
+                  </button>
+                )}
                 {remote.provider === "onedrive" && !remote.options.drive_id && (
                   <button
                     type="button"

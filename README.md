@@ -157,6 +157,12 @@ are too — the application asks Microsoft for them on your behalf.
 > its token, and the list shows a **Compléter la configuration** button that
 > queries Microsoft again. No need to redo the authorisation.
 
+> **When a token expires or is revoked** (`401`, `invalid_grant`), click
+> **Ré-autoriser** on the storage and sign in again **with the same account**.
+> Only the token is replaced; tasks stay as they are. A OneDrive sign-in that
+> leads to a different drive is refused, and every Mirror or Two-way task on
+> that storage must be simulated again before it runs.
+
 Removing that final copy-paste would require registering our own OAuth
 application with each provider, with the public domain and review process that
 implies. One paste is the best available trade today.

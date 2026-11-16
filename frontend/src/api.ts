@@ -189,6 +189,17 @@ export const completeRemote = (id: string) =>
     method: "POST",
   });
 
+/** Remplace le seul jeton OAuth d'un stockage existant. */
+export const reauthorizeRemote = (id: string, options: Record<string, string>) =>
+  request<{ simulation_required: string[] }>(`/api/remotes/${id}/reauthorize`, {
+    method: "POST",
+    body: JSON.stringify({
+      token: options.token,
+      drive_id: options.drive_id,
+      drive_type: options.drive_type,
+    }),
+  });
+
 export const testRemote = (id: string) =>
   request<RemoteTest>(`/api/remotes/${id}/test`, { method: "POST" });
 

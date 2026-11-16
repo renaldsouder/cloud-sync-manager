@@ -6,6 +6,10 @@ type Props = {
   provider: string;
   label: string;
   onAuthorized: (options: Record<string, string>) => void;
+  /** Ré-autorisation d'un stockage existant : son disque OneDrive est
+   * déjà connu, l'avertissement « créez tout de même le stockage » n'a
+   * pas lieu d'être. */
+  existing?: boolean;
 };
 
 /**
@@ -16,7 +20,12 @@ type Props = {
  * que rclone a enregistrée chez les fournisseurs — mais plus d'installation
  * ni de dialogue en ligne de commande.
  */
-export default function OAuthPanel({ provider, label, onAuthorized }: Props) {
+export default function OAuthPanel({
+  provider,
+  label,
+  onAuthorized,
+  existing = false,
+}: Props) {
   const [session, setSession] = useState<string | null>(null);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [redirect, setRedirect] = useState("");
@@ -47,7 +56,7 @@ export default function OAuthPanel({ provider, label, onAuthorized }: Props) {
       const done = await completeOAuth(session, redirect.trim());
       // Une autorisation aboutie mais incomplète doit se voir : le stockage
       // serait créé et inutilisable.
-      setError(done.error ?? null);
+      setError(existing ? null : (done.error ?? null));
       setSession(null);
       setAuthUrl(null);
       setRedirect("");
@@ -61,7 +70,9 @@ export default function OAuthPanel({ provider, label, onAuthorized }: Props) {
 
   return (
     <div className="notice">
-      <strong>Autoriser l'accès à {label}</strong>
+      <strong>
+        {existing ? "Ré-autoriser l'accès à" : "Autoriser l'accès à"} {label}
+      </strong>
 
       {!session && (
         <>
