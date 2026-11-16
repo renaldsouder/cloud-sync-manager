@@ -5,6 +5,7 @@ import {
   completeRemote,
   deleteRemote,
   fetchRemotes,
+  formatBytes,
   testRemote,
   type Remote,
   type RemoteTest,
@@ -135,6 +136,7 @@ export default function RemotesView() {
                   )}
                 </p>
               )}
+              {result?.ok && <Capacites capabilities={result.capabilities} />}
 
               {remote.provider === "onedrive" && !remote.options.drive_id && (
                 <p className="state state--error">
@@ -183,4 +185,33 @@ export default function RemotesView() {
       </ul>
     </section>
   );
+}
+
+/**
+ * Ce que le test a constaté au-delà de la simple connexion (§9.3) : l'espace
+ * disponible, quand le fournisseur sait le dire, et les sommes de contrôle
+ * qui rendent possible la comparaison par contenu (SYNC-005).
+ */
+function Capacites({ capabilities }: { capabilities: Record<string, unknown> }) {
+  const quota = capabilities.quota as
+    | { used?: number; free?: number; total?: number }
+    | undefined;
+  const hashes = capabilities.hashes as string[] | undefined;
+  const morceaux: string[] = [];
+  if (quota && typeof quota.used === "number") {
+    morceaux.push(
+      typeof quota.free === "number"
+        ? `${formatBytes(quota.used)} utilisés, ${formatBytes(quota.free)} libres`
+        : `${formatBytes(quota.used)} utilisés`,
+    );
+  }
+  if (hashes) {
+    morceaux.push(
+      hashes.length
+        ? `sommes de contrôle : ${hashes.slice(0, 3).join(", ")}${hashes.length > 3 ? "…" : ""}`
+        : "aucune somme de contrôle",
+    );
+  }
+  if (!morceaux.length) return null;
+  return <p className="state">{morceaux.join(" · ")}</p>;
 }
