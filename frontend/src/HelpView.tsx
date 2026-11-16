@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /**
- * Aide intégrée (AIDE-001, AIDE-002).
+ * Aide intégrée (AIDE-001, AIDE-002, AIDE-003).
  *
  * Les explications vivent ici en morceaux réutilisables plutôt que dans une
  * page unique : la moitié de leur utilité est d'être lisibles au moment du
@@ -258,6 +258,115 @@ export function AideTache() {
   );
 }
 
+/**
+ * FAQ de diagnostic (AIDE-003).
+ *
+ * Chaque entrée part de ce que l'utilisateur voit — le message, le statut —
+ * et non de la cause technique, qu'il ne connaît pas encore. Elle dit
+ * ensuite ce que l'application fait déjà d'elle-même, pour qu'on ne
+ * s'acharne pas à corriger ce qui se corrige seul.
+ */
+export function AideDepannage() {
+  return (
+    <div className="aide">
+      <Repli titre="« 401 », « invalid_grant », « token expired » : l'autorisation a expiré">
+        <p>
+          Google Drive, OneDrive et Dropbox délivrent une autorisation que rclone
+          renouvelle seul tant que le stockage sert régulièrement. Elle peut
+          pourtant expirer : mot de passe du compte changé, accès révoqué depuis
+          le compte, ou plusieurs mois sans aucune utilisation.
+        </p>
+        <p>
+          Onglet <strong>Stockages Cloud</strong>, <strong>Tester</strong> : un
+          échec d'authentification le confirme. L'interface ne sait pas encore
+          renouveler l'autorisation d'un stockage existant ; il faut aujourd'hui
+          ajouter de nouveau le stockage, puis recréer les tâches qui s'en
+          servent.
+        </p>
+      </Repli>
+
+      <Repli titre="« permission denied » : droits sur le dossier local">
+        <p>
+          Le conteneur écrit avec l'utilisateur défini par <code>PUID</code> et{" "}
+          <code>PGID</code> — <code>99</code> et <code>100</code>, soit{" "}
+          <code>nobody:users</code>, comme les autres applications Unraid. Un
+          dossier créé par un autre compte, ou depuis la console en{" "}
+          <code>root</code>, peut lui être fermé.
+        </p>
+        <ul>
+          <li>
+            Vérifiez que le dossier est bien sous un chemin monté dans le
+            conteneur : <strong>Parcourir les dossiers…</strong> ne montre que
+            ceux-là.
+          </li>
+          <li>
+            Dans Unraid, <strong>Tools → New Permissions</strong> sur le share
+            concerné rétablit les droits habituels.
+          </li>
+          <li>
+            <code>appdata</code>, <code>system</code> et <code>domains</code> ne
+            peuvent jamais être une destination : ce refus est volontaire.
+          </li>
+        </ul>
+      </Repli>
+
+      <Repli titre="« quota exceeded », « insufficient storage » : espace Cloud plein">
+        <p>
+          <strong>Tester</strong> le stockage affiche l'espace utilisé et libre
+          quand le fournisseur sait le dire. Pensez à la corbeille{" "}
+          <code>.cloudsync-trash</code> : les fichiers supprimés ou remplacés y
+          sont conservés à la destination, et occupent donc de la place, jusqu'à
+          leur purge (30 jours par défaut, réglable avec{" "}
+          <code>CSM_QUARANTINE_RETENTION_DAYS</code>).
+        </p>
+        <p>
+          Les fichiers déjà passés restent en place. Une fois de la place
+          libérée, relancez : seuls les fichiers manquants seront transférés.
+        </p>
+      </Repli>
+
+      <Repli titre="Délai dépassé, connexion perdue : erreurs réseau">
+        <p>
+          rclone réessaie d'abord chaque opération de lui-même. Si l'exécution
+          échoue malgré tout sur une erreur temporaire, la tâche repart seule
+          après 5, 15 puis 45&nbsp;minutes, en repassant par toutes les
+          vérifications ; la tâche affiche l'heure de la prochaine tentative, et
+          vous n'êtes notifié que si la dernière échoue.
+        </p>
+        <p>
+          Si l'erreur persiste : le serveur Unraid a-t-il accès à Internet,
+          un pare-feu ou un VPN filtre-t-il le conteneur, le fournisseur
+          signale-t-il une panne ? Une limite de bande passante trop basse peut
+          aussi faire expirer des transferts de gros fichiers.
+        </p>
+      </Repli>
+
+      <Repli titre="« source inaccessible » ou « la source ne contient aucun fichier » : la tâche s'arrête sans rien supprimer">
+        <p>
+          C'est le garde-fou du share démonté : une source qui ne répond pas, ou
+          vide alors que la destination ne l'est pas, ressemble exactement à une
+          suppression de tout. La tâche passe en <strong>Bloquée</strong> plutôt
+          que de la propager, et rien n'est touché.
+        </p>
+        <p>
+          Vérifiez que le share est monté (array démarré, disque présent) et que
+          le chemin n'a pas changé. Si la source a réellement été vidée, à
+          dessein, modifiez la tâche et simulez avant de relancer.
+        </p>
+      </Repli>
+
+      <Repli titre="Demander de l'aide">
+        <p>
+          <strong>Paramètres → Diagnostic</strong> produit un fichier à joindre
+          à votre demande : versions, réglages, état des tâches et dernières
+          erreurs. Il ne contient jamais d'identifiant ; noms, dossiers et
+          fichiers y sont anonymisés par défaut. Relisez-le avant de le publier.
+        </p>
+      </Repli>
+    </div>
+  );
+}
+
 export default function HelpView({ bidirectional = false }: Props) {
   return (
     <>
@@ -279,6 +388,11 @@ export default function HelpView({ bidirectional = false }: Props) {
       <section className="card">
         <h2>Créer une tâche de synchronisation</h2>
         <AideTache />
+      </section>
+
+      <section className="card">
+        <h2>Dépannage</h2>
+        <AideDepannage />
       </section>
 
       <section className="card">
