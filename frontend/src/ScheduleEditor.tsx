@@ -32,6 +32,10 @@ export default function ScheduleEditor({ task, onSaved, onCancel }: Props) {
   const [at, setAt] = useState(current?.time ?? "02:30");
   const [days, setDays] = useState<number[]>(current?.days ?? [1, 2, 3, 4, 5]);
   const [catchUp, setCatchUp] = useState<Schedule["catch_up"]>(current?.catch_up ?? "skip");
+  const [cron, setCron] = useState(current?.cron ?? "30 2 * * *");
+  const [quiet, setQuiet] = useState(Boolean(current?.quiet));
+  const [quietStart, setQuietStart] = useState(current?.quiet?.start ?? "08:00");
+  const [quietEnd, setQuietEnd] = useState(current?.quiet?.end ?? "18:00");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -50,6 +54,8 @@ export default function ScheduleEditor({ task, onSaved, onCancel }: Props) {
     if (kind === "interval") schedule.minutes = Number(minutes);
     if (kind === "daily" || kind === "weekly") schedule.time = at;
     if (kind === "weekly") schedule.days = days;
+    if (kind === "cron") schedule.cron = cron.trim();
+    if (kind !== "manual" && quiet) schedule.quiet = { start: quietStart, end: quietEnd };
 
     try {
       await updateTask(task.id, { schedule });
@@ -71,6 +77,7 @@ export default function ScheduleEditor({ task, onSaved, onCancel }: Props) {
             ["interval", "À intervalle régulier"],
             ["daily", "Tous les jours à heure fixe"],
             ["weekly", "Certains jours de la semaine"],
+            ["cron", "Expression cron (avancé)"],
           ] as [Schedule["kind"], string][]
         ).map(([value, label]) => (
           <label className="choice" key={value}>
@@ -123,6 +130,64 @@ export default function ScheduleEditor({ task, onSaved, onCancel }: Props) {
             ))}
           </div>
         </div>
+      )}
+
+      {kind === "cron" && (
+        <label className="field">
+          <span className="field__label">Expression cron</span>
+          <input
+            value={cron}
+            spellCheck={false}
+            onChange={(event) => setCron(event.target.value)}
+          />
+          <span className="field__help">
+            Cinq champs : minute, heure, jour du mois, mois, jour de la semaine
+            (0 ou 7 = dimanche). Par exemple <code>*/15 9-17 * * 1-5</code> :
+            toutes les quinze minutes, de 9&nbsp;h à 17&nbsp;h, en semaine. Ni
+            noms de jours ni raccourcis <code>@daily</code>.
+          </span>
+        </label>
+      )}
+
+      {kind !== "manual" && (
+        <>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={quiet}
+              onChange={(event) => setQuiet(event.target.checked)}
+            />
+            Ne jamais démarrer pendant une plage horaire
+          </label>
+          {quiet && (
+            <div className="advanced__grid">
+              <label className="field">
+                <span className="field__label">De</span>
+                <input
+                  type="time"
+                  value={quietStart}
+                  onChange={(event) => setQuietStart(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span className="field__label">À</span>
+                <input
+                  type="time"
+                  value={quietEnd}
+                  onChange={(event) => setQuietEnd(event.target.value)}
+                />
+              </label>
+            </div>
+          )}
+          {quiet && (
+            <p className="state">
+              Une exécution prévue dans cette plage part à sa fin. Une exécution
+              déjà en cours n'est pas interrompue : pour la ralentir, utilisez une
+              limite de bande passante selon l'heure dans «&nbsp;Modifier&nbsp;».
+              Un lancement manuel reste possible à tout moment.
+            </p>
+          )}
+        </>
       )}
 
       {kind !== "manual" && (

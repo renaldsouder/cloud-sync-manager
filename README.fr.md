@@ -215,8 +215,10 @@ rclone, les journaux et les jeux de filtres appliqués.
 - **Sens** — Local → Cloud et Cloud → Local
 - **Modes** — Copie (ne supprime jamais) et Miroir (protégé, voir plus haut)
 - **Planification** — toutes les N minutes, chaque jour à heure fixe, ou certains
-  jours de la semaine. Pas d'expression cron. Politique de rattrapage explicite
-  après un redémarrage du serveur.
+  jours de la semaine, sans jamais écrire d'expression cron ; un mode avancé
+  l'accepte pour qui la connaît. Une plage horaire peut être exclue (aucun
+  démarrage pendant les heures de bureau, par exemple). Politique de rattrapage
+  explicite après un redémarrage du serveur.
 - **Filtres** — règles ordonnées d'inclusion/exclusion par chemin, extension,
   motif de nom, fichiers cachés et taille, avec un outil d'aperçu qui montre
   quelle règle a tranché

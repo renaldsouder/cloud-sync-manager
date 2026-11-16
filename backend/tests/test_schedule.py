@@ -157,3 +157,105 @@ def test_manual_tasks_have_nothing_to_resolve() -> None:
 )
 def test_human_readable(payload: dict, expected: str) -> None:
     assert describe(Schedule.from_dict(payload)) == expected
+
+
+# -- fenêtre d'exclusion (PLAN-005) ------------------------------------------
+
+
+def test_a_deadline_inside_the_quiet_window_moves_to_its_end() -> None:
+    """Brider le Cloud pendant les heures de bureau : la tâche horaire
+    attend la fin de la fenêtre au lieu de partir à 10:00."""
+    schedule = Schedule.from_dict(
+        {"kind": "interval", "minutes": 60, "quiet": {"start": "08:00", "end": "18:00"}}
+    )
+    morning = NOW.replace(hour=7, minute=30)
+    assert next_occurrence(schedule, morning) == NOW.replace(hour=18, minute=0)
+    evening = NOW.replace(hour=19, minute=0)
+    assert next_occurrence(schedule, evening) == NOW.replace(hour=20, minute=0)
+
+
+def test_a_quiet_window_can_span_midnight() -> None:
+    schedule = Schedule.from_dict(
+        {"kind": "daily", "time": "23:30", "quiet": {"start": "22:00", "end": "06:00"}}
+    )
+    following = next_occurrence(schedule, NOW)
+    assert following == (NOW + timedelta(days=1)).replace(hour=6, minute=0)
+    assert schedule.is_quiet(NOW.replace(hour=2)) is True
+    assert schedule.is_quiet(NOW.replace(hour=6)) is False
+
+
+def test_the_quiet_window_round_trips_and_is_described() -> None:
+    payload = {"kind": "daily", "time": "02:30", "quiet": {"start": "08:00", "end": "18:00"}}
+    schedule = Schedule.from_dict(payload)
+    assert Schedule.parse(schedule.to_json()) == schedule
+    assert describe(schedule) == "tous les jours à 02:30, jamais entre 08:00 et 18:00"
+
+
+@pytest.mark.parametrize(
+    "quiet",
+    [{"start": "08:00"}, {"start": "08:00", "end": "08:00"}, {"start": "8h", "end": "9h"}],
+)
+def test_an_unclear_quiet_window_is_refused(quiet: dict) -> None:
+    with pytest.raises(ScheduleError):
+        Schedule.from_dict({"kind": "interval", "minutes": 60, "quiet": quiet})
+
+
+# -- cron (PLAN-004) ----------------------------------------------------------
+
+
+def test_cron_every_quarter_hour_on_weekdays() -> None:
+    schedule = Schedule.from_dict({"kind": "cron", "cron": "*/15 9-17 * * 1-5"})
+    # Mercredi 14:00 → 14:15.
+    assert next_occurrence(schedule, NOW) == NOW.replace(minute=15)
+    # Vendredi 17:50 → lundi 09:00.
+    friday = datetime(2026, 9, 11, 17, 50, tzinfo=timezone.utc)
+    assert next_occurrence(schedule, friday) == datetime(2026, 9, 14, 9, 0, tzinfo=timezone.utc)
+
+
+def test_cron_is_strictly_after_the_reference() -> None:
+    """Sinon la tâche repartirait en boucle pendant toute la minute."""
+    schedule = Schedule.from_dict({"kind": "cron", "cron": "0 14 * * *"})
+    assert next_occurrence(schedule, NOW) == NOW + timedelta(days=1)
+
+
+def test_cron_day_of_month_or_day_of_week() -> None:
+    """Le cron classique combine les deux jours par un OU quand ils sont
+    tous deux restreints : « le 1er, et chaque dimanche »."""
+    schedule = Schedule.from_dict({"kind": "cron", "cron": "0 3 1 * 0"})
+    # Mercredi 9 → dimanche 13.
+    assert next_occurrence(schedule, NOW).day == 13
+    assert describe(schedule) == "cron « 0 3 1 * 0 »"
+
+
+@pytest.mark.parametrize(
+    "expression",
+    ["", "* * * *", "60 * * * *", "* 24 * * *", "0 0 31 2 *", "@daily", "*/0 * * * *", "a * * * *"],
+)
+def test_an_unreadable_cron_is_refused_at_save(expression: str) -> None:
+    """Une expression qui ne se déclenche jamais (« 31 février ») est un
+    réglage qu'on croit actif et qui ne fait rien."""
+    with pytest.raises(ScheduleError):
+        Schedule.from_dict({"kind": "cron", "cron": expression})
+
+
+@pytest.mark.usefixtures("rclone_path")
+def test_an_import_drops_an_unreadable_schedule(client, tmp_path, local_root, settings) -> None:
+    """Une planification invalide restaurée ferait échouer le planificateur
+    au démarrage suivant — donc toute l'application."""
+    from fastapi.testclient import TestClient
+
+    from csm.main import create_app
+    from tests.test_tasks_api import make_cloud, make_task
+
+    remote_id = make_cloud(client, tmp_path / "cloud")
+    (local_root / "Photos").mkdir()
+    make_task(client, remote_id, local_root / "Photos")
+    exported = client.get("/api/config/export").json()
+    exported["tasks"][0]["schedule"] = {"kind": "cron", "cron": "0 0 31 2 *"}
+
+    fresh = settings.model_copy(update={"config_dir": tmp_path / "config2"})
+    with TestClient(create_app(fresh)) as restored:
+        report = restored.post("/api/config/import", json=exported).json()
+        assert any("planification ignorée" in w for w in report["warnings"])
+    with TestClient(create_app(fresh)) as again:
+        assert again.get("/api/tasks").json()[0]["schedule"] is None

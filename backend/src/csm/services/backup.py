@@ -30,6 +30,7 @@ from csm.db.models import FilterSet, Remote, Task
 from csm.paths import PathNotAllowed, resolve_within_roots
 from csm.services import performance
 from csm.services import settings_store
+from csm.services.schedule import Schedule, ScheduleError
 
 #: Version du format. Toute évolution incompatible doit l'incrémenter et
 #: être accompagnée d'une migration testée (§16, UPDATE-002).
@@ -190,6 +191,17 @@ def import_config(
             )
 
         schedule = entry.get("schedule")
+        if schedule:
+            try:
+                schedule = Schedule.from_dict(schedule).to_dict()
+            except (ScheduleError, AttributeError) as exc:
+                # Une planification illisible ferait échouer le planificateur
+                # au démarrage suivant : on l'écarte en le disant.
+                schedule = None
+                report.warnings.append(
+                    f"« {name} » : planification ignorée ({exc}), la tâche "
+                    "devient manuelle"
+                )
         try:
             bandwidth = performance.normalise(entry.get("bandwidth"))
         except performance.PerformanceError as exc:

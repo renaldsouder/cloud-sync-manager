@@ -115,6 +115,12 @@ class Scheduler:
 
             for task in due:
                 schedule = Schedule.parse(task.schedule_json)
+                if schedule.is_quiet(now):
+                    # PLAN-005 — un rattrapage ou une échéance ancienne qui
+                    # tombe dans la fenêtre d'exclusion attend sa fin.
+                    task.next_run_at = schedule.leave_quiet(now)
+                    session.commit()
+                    continue
                 # L'échéance est avancée **avant** le lancement : si le
                 # démarrage échoue, la tâche ne repart pas en boucle au
                 # battement suivant.

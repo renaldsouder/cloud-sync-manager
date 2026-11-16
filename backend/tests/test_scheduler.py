@@ -286,3 +286,47 @@ def _force_deadline(client: TestClient, task_id: str, moment: datetime) -> None:
         session.commit()
     finally:
         session.close()
+
+
+def test_a_due_task_waits_for_the_end_of_the_quiet_window(
+    client: TestClient, tmp_path: Path, local_root: Path
+) -> None:
+    """PLAN-005 — une échéance ancienne (rattrapage, horloge qui a sauté)
+    qui tombe dans la fenêtre d'exclusion ne part pas : elle attend sa fin."""
+    task = prepare(
+        client,
+        tmp_path,
+        local_root,
+        kind="interval",
+        minutes=60,
+        quiet={"start": "00:00", "end": "23:59"},
+    )
+    clock = FakeClock(local_now().replace(hour=12, minute=0))
+    session = client.app.state.session_factory()
+    try:
+        stored = session.get(Task, task["id"])
+        stored.next_run_at = clock.moment - timedelta(minutes=5)
+        session.commit()
+    finally:
+        session.close()
+
+    scheduler = build_scheduler(client, clock)
+    assert scheduler.tick() == []
+
+    session = client.app.state.session_factory()
+    try:
+        deferred = session.get(Task, task["id"]).next_run_at
+        assert deferred is not None
+        assert deferred.astimezone(clock.moment.tzinfo).strftime("%H:%M") == "23:59"
+    finally:
+        session.close()
+    assert client.get(f"/api/tasks/{task['id']}/runs").json() == []
+
+
+def test_a_cron_schedule_is_accepted_through_the_api(
+    client: TestClient, tmp_path: Path, local_root: Path
+) -> None:
+    task = prepare(client, tmp_path, local_root, kind="cron", cron="30 2 * * 1-5")
+    assert task["schedule_label"] == "cron « 30 2 * * 1-5 »"
+    assert task["schedule"]["cron"] == "30 2 * * 1-5"
+    assert task["next_run_at"] is not None
