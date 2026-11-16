@@ -289,6 +289,12 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
             pour 500&nbsp;Ko/s. <code>2M:1M</code> limite l'envoi à 2&nbsp;Mo/s
             et la réception à 1&nbsp;Mo/s.
           </span>
+          <span className="field__help">
+            Selon l'heure : <code>08:00,1M 19:00,5M 23:00,off</code> bride à
+            1&nbsp;Mo/s en journée, 5&nbsp;Mo/s en soirée et libère la nuit.
+            Préfixez d'un jour anglais pour une grille hebdomadaire&nbsp;:{" "}
+            <code>Sat-00:00,off</code>. L'heure est celle du serveur.
+          </span>
         </label>
 
         {task.mode !== "bisync" && (

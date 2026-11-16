@@ -213,7 +213,7 @@ configuration, the logs and the applied filter sets.
   a confirmed deletion is never replayed on its own. One notification, only if
   the last attempt fails.
 - **Transfer settings** — per task: parallel transfers and checkers, bandwidth
-  limit (upload and download), and checksum comparison. The latter only applies
+  limit (upload and download, optionally varying by time of day), and checksum comparison. The latter only applies
   when both sides share a hash; otherwise rclone would compare sizes only, so
   the run falls back to size and date and says so.
 - **Live progress** — current file, throughput, ETA, over SSE
