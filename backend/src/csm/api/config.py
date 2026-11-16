@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ from csm.api.deps import get_adapter, get_session, get_settings_dep
 from csm.config import Settings
 from csm.db.models import FilterSet, Task
 from csm.rclone.adapter import RcloneAdapter, RcloneError
-from csm.services import backup, settings_store
+from csm.services import backup, diagnostic, settings_store
 from csm.services.filters import (
     FilterError,
     compile_filters,
@@ -292,3 +292,34 @@ def import_configuration(
     except backup.BackupError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return report.as_dict()
+
+
+# -- diagnostic ----------------------------------------------------------------
+
+
+@router.get("/diagnostic")
+def download_diagnostic(
+    request: Request,
+    anonymise: bool = True,
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings_dep),
+) -> Response:
+    """Package de diagnostic (LOG-004), anonymisé par défaut.
+
+    Servi en pièce jointe : c'est un fichier à relire puis à joindre à une
+    demande d'aide, pas une réponse d'API à afficher.
+    """
+    runner = getattr(request.app.state, "run_manager", None)
+    payload = diagnostic.build(
+        session,
+        settings,
+        anonymise=anonymise,
+        live_runs=runner.snapshots() if runner else None,
+    )
+    return Response(
+        content=diagnostic.dumps(payload),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{diagnostic.filename()}"'
+        },
+    )

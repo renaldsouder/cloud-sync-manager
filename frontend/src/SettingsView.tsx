@@ -98,6 +98,8 @@ export default function SettingsView() {
     }, "Paramètres enregistrés.");
   }
 
+  const [anonymise, setAnonymise] = useState(true);
+
   async function changeLogLevel(niveau: LogLevel) {
     const precedent = logLevel;
     setLogLevel(niveau);
@@ -126,6 +128,17 @@ export default function SettingsView() {
       anchor.click();
       URL.revokeObjectURL(url);
     });
+  }
+
+  /**
+   * Package de diagnostic (LOG-004). Un lien direct plutôt qu'un appel
+   * `fetch` : le serveur le sert en pièce jointe, avec son nom de fichier,
+   * et le cookie de session suit une navigation ordinaire.
+   */
+  function downloadDiagnostic() {
+    const anchor = document.createElement("a");
+    anchor.href = `/api/diagnostic?anonymise=${anonymise ? "true" : "false"}`;
+    anchor.click();
   }
 
   async function upload(file: File) {
@@ -287,6 +300,39 @@ export default function SettingsView() {
       </section>
 
       <FiltersPanel />
+
+      <section className="card">
+        <h2>Diagnostic</h2>
+        <p className="state">
+          Un fichier à joindre à une demande d'aide : versions, réglages,
+          état des stockages et des tâches, dernières exécutions et leurs
+          erreurs. <strong>Aucun identifiant ni mot de passe</strong> n'y figure,
+          dans aucun cas.
+        </p>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={anonymise}
+            onChange={(event) => setAnonymise(event.target.checked)}
+          />
+          Anonymiser les noms de tâches, de stockages, de dossiers et de fichiers
+        </label>
+        {!anonymise && (
+          <p className="state state--error">
+            Sans anonymisation, vos noms de dossiers et de fichiers apparaissent en
+            clair : ne publiez pas ce fichier sur un forum.
+          </p>
+        )}
+        <p className="state">
+          Le fichier est lisible : relisez-le avant de le publier. Un nom cité
+          par rclone dans un message d'erreur peut y subsister.
+        </p>
+        <div className="actions">
+          <button type="button" className="btn" onClick={downloadDiagnostic}>
+            Télécharger le diagnostic
+          </button>
+        </div>
+      </section>
 
       <section className="card">
         <h2>Sauvegarde de la configuration</h2>

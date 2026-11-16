@@ -237,6 +237,9 @@ rclone, les journaux et les jeux de filtres appliqués.
   transféré, supprimé, ignoré ou en erreur, avec recherche par chemin. Une liste
   tronquée le dit franchement : ne pas y trouver un fichier ne signifie jamais
   qu'il n'a pas été traité.
+- **Diagnostic** — un fichier à joindre à une demande d'aide (Paramètres →
+  Diagnostic) : versions, réglages, état des tâches et dernières erreurs. Jamais
+  d'identifiant ; noms, dossiers et fichiers anonymisés par défaut
 - **Notifications** — API intégrée d'Unraid et webhook générique
 - **Sauvegarde** — export et restauration de la configuration, identifiants
   volontairement exclus ; les tâches restaurées arrivent en pause
