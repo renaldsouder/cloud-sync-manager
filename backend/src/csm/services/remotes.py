@@ -189,6 +189,19 @@ def test_remote(
         ok = False
 
     if ok:
+        try:
+            features = adapter.features(remote.rclone_remote_name + ":", timeout=timeout)
+        except RcloneError:
+            features = None
+        if features is not None:
+            hashes = features.get("Hashes")
+            capabilities["hashes"] = (
+                [str(name) for name in hashes] if isinstance(hashes, list) else []
+            )
+            capabilities["checksum"] = bool(capabilities["hashes"])
+            precision = features.get("Precision")
+            if isinstance(precision, int):
+                capabilities["modtime_precision_ns"] = precision
         about = adapter.about(remote.rclone_remote_name + ":", timeout=timeout)
         capabilities["about"] = about is not None
         if about:

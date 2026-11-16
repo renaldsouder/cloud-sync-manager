@@ -41,7 +41,7 @@ from csm.rclone.events import RcloneEvent
 from csm.security.redaction import redact
 from csm.services import guards
 from csm.services.tasks import MODES
-from csm.services import notifications, settings_store
+from csm.services import notifications, performance, settings_store
 from csm.services.filters import FilterError, compile_filters, parse_rules
 from csm.services.guards import DeletionPlan, GuardBlocked
 
@@ -138,6 +138,10 @@ class RunPlan:
     max_deletes: int | None = None
     max_delete_percent: int | None = None
     quarantine: bool = True
+    #: Comparaison par somme de contrôle (SYNC-005). Demandée par la tâche,
+    #: elle n'est appliquée qu'après avoir vérifié qu'un algorithme est
+    #: commun aux deux côtés — voir ``RunManager._resolve_checksum``.
+    checksum: bool = False
     #: Niveau de journalisation en vigueur au lancement (LOG-003). Figé ici
     #: plutôt que relu pendant l'exécution : changer le réglage en cours de
     #: route donnerait un historique à moitié détaillé, impossible à lire.
@@ -471,7 +475,7 @@ class RunManager:
                 raise RunError("le stockage associé à cette tâche a disparu")
 
             source, destination = endpoints(task, remote)
-            performance = _performance(task)
+            tuning = _performance(task)
             verbosity = settings_store.log_level(session)
             bisync = bisync_settings(task) if task.mode == "bisync" else {}
             plan = RunPlan(
@@ -480,9 +484,12 @@ class RunManager:
                 destination=destination,
                 dry_run=dry_run,
                 confirm_deletions=confirm_deletions,
-                bwlimit=performance.get("limit"),
-                transfers=performance.get("transfers"),
-                checkers=performance.get("checkers"),
+                bwlimit=tuning.get("limit"),
+                transfers=tuning.get("transfers"),
+                checkers=tuning.get("checkers"),
+                # bisync a sa propre logique de comparaison : l'option ne
+                # s'applique qu'à la Copie et au Miroir.
+                checksum=bool(tuning.get("checksum")) and task.mode != "bisync",
                 filter_file=_write_filter_file(session, task, self._filters_dir),
                 max_deletes=task.max_deletes,
                 max_delete_percent=task.max_delete_percent,
@@ -570,6 +577,10 @@ class RunManager:
     ) -> None:
         session = self._session_factory()
         try:
+            if plan.checksum:
+                live.phase = "vérification des sommes de contrôle"
+                plan = self._resolve_checksum(live, plan, session)
+
             # Un côté vide est anormal — sauf à la toute première mise en
             # place de la référence, où l'on relie deux arborescences dont
             # l'une peut légitimement être vide. Le §8.1 protège ce moment
@@ -693,6 +704,55 @@ class RunManager:
         finally:
             session.close()
             self._forget(live.run_id)
+
+    # -- comparaison par somme de contrôle (SYNC-005) -----------------------
+
+    def _resolve_checksum(
+        self, live: LiveRun, plan: RunPlan, session: Session
+    ) -> RunPlan:
+        """N'applique ``--checksum`` que si les deux côtés partagent un algorithme.
+
+        Sans algorithme commun, rclone ne compare plus que la taille : un
+        fichier modifié sans changer de taille ne serait plus jamais recopié,
+        et la destination divergerait en silence. Dans le doute — capacités
+        illisibles, fournisseur injoignable —, on revient à la comparaison
+        par taille et date, qui est le comportement par défaut de rclone, et
+        on le dit dans l'historique.
+        """
+        try:
+            source = self._adapter.features(plan.source).get("Hashes")
+            destination = self._adapter.features(plan.destination).get("Hashes")
+            shared = performance.common_hashes(
+                source if isinstance(source, list) else None,
+                destination if isinstance(destination, list) else None,
+            )
+            reason = "aucune somme de contrôle commune aux deux côtés"
+        except RcloneError as exc:
+            shared = []
+            reason = f"capacités du stockage illisibles ({redact(str(exc))})"
+
+        if shared:
+            session.add(
+                TaskEvent(
+                    run_id=live.run_id,
+                    kind="other",
+                    message=f"comparaison par somme de contrôle ({shared[0]})",
+                )
+            )
+            return plan
+
+        session.add(
+            TaskEvent(
+                run_id=live.run_id,
+                kind="warning",
+                message=(
+                    f"comparaison par somme de contrôle impossible : {reason}. "
+                    "Comparaison par taille et date de modification."
+                ),
+            )
+        )
+        session.commit()
+        return replace(plan, checksum=False)
 
     # -- nouvelles tentatives (SYNC-006) ------------------------------------
 
@@ -905,6 +965,7 @@ class RunManager:
             backup_dir=backup_dir,
             filter_file=plan.filter_file,
             log_level=settings_store.RCLONE_LOG_LEVEL[plan.log_level],
+            checksum=plan.checksum,
             extra=extra,
         )
 
@@ -975,6 +1036,7 @@ class RunManager:
             checkers=plan.checkers,
             filter_file=plan.filter_file,
             log_level=settings_store.RCLONE_LOG_LEVEL[plan.log_level],
+            checksum=plan.checksum,
             # La corbeille doit être exclue ici aussi : sans cela, la
             # simulation compterait comme « à supprimer » tout ce qu'une
             # exécution précédente y a déposé, et ferait franchir le seuil
@@ -1368,28 +1430,14 @@ def _summary_json(live: LiveRun) -> str:
 
 
 def _performance(task: Task) -> dict[str, Any]:
-    """Réglages de transfert de la tâche (PERF-001, PERF-002).
-
-    ``limit`` suit le format rclone : ``1M``, ``500k``, ou ``2M:1M`` pour
-    montant:descendant.
-    """
+    """Réglages de transfert de la tâche (PERF-001, PERF-002, SYNC-005)."""
     if not task.bandwidth_json:
         return {}
     try:
         payload = json.loads(task.bandwidth_json)
     except ValueError:
         return {}
-    if not isinstance(payload, dict):
-        return {}
-
-    settings: dict[str, Any] = {}
-    if payload.get("limit"):
-        settings["limit"] = str(payload["limit"])
-    for key in ("transfers", "checkers"):
-        value = payload.get(key)
-        if isinstance(value, int) and value > 0:
-            settings[key] = value
-    return settings
+    return performance.lenient(payload)
 
 
 def _write_filter_file(session: Session, task: Task, directory: Path | None) -> str | None:

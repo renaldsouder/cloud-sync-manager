@@ -1097,3 +1097,34 @@ body {
 .warning strong {
   color: var(--ink);
 }
+
+/* Réglages de transfert (PERF-001, PERF-002, SYNC-005) : repliés tant
+   qu'on n'y a pas touché, ils ne doivent pas encombrer le cas courant. */
+.advanced {
+  margin: 16px 0;
+  padding: 12px 14px 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.advanced__summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.advanced .toggle {
+  margin-bottom: 6px;
+}
+
+.advanced .toggle + .field__help {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.advanced__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0 16px;
+}

@@ -28,6 +28,7 @@ from csm import __version__
 from csm.config import Settings
 from csm.db.models import FilterSet, Remote, Task
 from csm.paths import PathNotAllowed, resolve_within_roots
+from csm.services import performance
 from csm.services import settings_store
 
 #: Version du format. Toute évolution incompatible doit l'incrémenter et
@@ -189,7 +190,15 @@ def import_config(
             )
 
         schedule = entry.get("schedule")
-        bandwidth = entry.get("bandwidth")
+        try:
+            bandwidth = performance.normalise(entry.get("bandwidth"))
+        except performance.PerformanceError as exc:
+            # Ces valeurs finissent dans la ligne de commande : un export
+            # retouché à la main ne doit pas pouvoir y glisser une option.
+            bandwidth = None
+            report.warnings.append(
+                f"« {name} » : réglages de transfert ignorés ({exc})"
+            )
         session.add(
             Task(
                 id=str(entry.get("id")) or None,

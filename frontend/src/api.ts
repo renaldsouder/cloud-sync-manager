@@ -245,8 +245,17 @@ export type Task = {
   schedule: Schedule | null;
   schedule_label: string;
   live: LiveRun | null;
+  bandwidth: Performance | null;
   /** Nouvelle tentative prévue après une erreur temporaire (SYNC-006). */
   retry: PendingRetry | null;
+};
+
+/** Réglages de transfert (PERF-001, PERF-002, SYNC-005). */
+export type Performance = {
+  transfers?: number;
+  checkers?: number;
+  limit?: string;
+  checksum?: boolean;
 };
 
 export type PendingRetry = {
@@ -431,6 +440,7 @@ export type TaskPatch = {
   max_deletes?: number;
   max_delete_percent?: number;
   quarantine_enabled?: boolean;
+  bandwidth?: Performance;
 };
 
 export const updateTask = (id: string, patch: TaskPatch) =>

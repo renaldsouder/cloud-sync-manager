@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from csm.config import Settings
 from csm.db.models import Remote, Task
+from csm.services import performance
 from csm.services.schedule import Schedule, ScheduleError, next_occurrence
 from csm.paths import (
     PathNotAllowed,
@@ -101,6 +102,13 @@ def forget_workspace(settings: Settings, task_id: str) -> list[str]:
     return efface
 
 
+def _performance_or_refuse(payload: dict | None) -> dict | None:
+    try:
+        return performance.normalise(payload)
+    except performance.PerformanceError as exc:
+        raise TaskError(str(exc)) from exc
+
+
 def _refuse_overlap(session: Session, resolved: Path, task_id: str | None) -> None:
     """Deux tâches aux chemins locaux imbriqués peuvent se renvoyer des
     suppressions indéfiniment (§8.6, P13)."""
@@ -172,8 +180,9 @@ def create_task(
 
     if filter_set_id:
         task.filter_set_id = filter_set_id
-    if bandwidth:
-        task.bandwidth_json = json.dumps(bandwidth)
+    cleaned = _performance_or_refuse(bandwidth)
+    if cleaned:
+        task.bandwidth_json = json.dumps(cleaned)
 
     apply_schedule(task, schedule, now=now)
 
@@ -251,7 +260,8 @@ def update_task(
         task.filter_set_id = filter_set_id or None
 
     if bandwidth is not None:
-        task.bandwidth_json = json.dumps(bandwidth) if bandwidth else None
+        cleaned = _performance_or_refuse(bandwidth)
+        task.bandwidth_json = json.dumps(cleaned) if cleaned else None
 
     if max_deletes is not None:
         task.max_deletes = max_deletes
