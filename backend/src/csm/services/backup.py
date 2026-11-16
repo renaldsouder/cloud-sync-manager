@@ -92,7 +92,10 @@ def export_config(session: Session) -> dict[str, Any]:
             "schedule": json.loads(task.schedule_json) if task.schedule_json else None,
             "bandwidth": json.loads(task.bandwidth_json) if task.bandwidth_json else None,
         }
-        for task in session.scalars(select(Task).order_by(Task.name)).all()
+        # Une copie ponctuelle est un événement passé, pas une configuration.
+        for task in session.scalars(
+            select(Task).where(Task.one_shot.is_(False)).order_by(Task.name)
+        ).all()
     ]
 
     stored = settings_store.all_settings(session)

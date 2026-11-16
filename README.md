@@ -224,6 +224,9 @@ configuration, the logs and the applied filter sets.
 - **Per-file detail** — open a run to see every file transferred, deleted,
   skipped or in error, searchable by path. A truncated list says so, loudly:
   not finding a file there never means it was not handled.
+- **One-off copy** — copy a folder once from the Tasks tab, without creating a
+  task. Always a Copy: it never deletes anything. Old ones are purged with the
+  history.
 - **Diagnostics** — a file to attach to a help request (Settings → Diagnostic):
   versions, settings, task state and recent errors. Never any credential; names,
   folders and files anonymised by default

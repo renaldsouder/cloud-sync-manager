@@ -52,7 +52,9 @@ def list_providers(
 
 def _task_counts(session: Session) -> dict[str, int]:
     rows = session.execute(
-        select(Task.remote_id, func.count(Task.id)).group_by(Task.remote_id)
+        select(Task.remote_id, func.count(Task.id))
+        .where(Task.one_shot.is_(False))
+        .group_by(Task.remote_id)
     ).all()
     return {remote_id: count for remote_id, count in rows}
 

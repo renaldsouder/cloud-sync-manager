@@ -171,11 +171,29 @@ class Scheduler:
                     if started is not None and started < cutoff:
                         session.delete(run)  # les événements suivent en cascade
                         removed += 1
+            removed += self._purge_one_shots(session, cutoff)
             if removed:
                 session.commit()
                 logger.info("%d exécution(s) purgée(s) de l'historique", removed)
         finally:
             session.close()
+        return removed
+
+    def _purge_one_shots(self, session: Session, cutoff: datetime) -> int:
+        """Copies ponctuelles plus anciennes que la rétention (SYNC-008).
+
+        Elles n'ont pas de « dernières exécutions à garder » : une copie
+        ponctuelle n'a qu'une exécution, et son intérêt décroît avec elle.
+        Une copie encore en cours n'est jamais touchée.
+        """
+        removed = 0
+        for task in session.scalars(select(Task).where(Task.one_shot.is_(True))).all():
+            if self._runs.is_running(task.id):
+                continue
+            created = as_utc(task.created_at)
+            if created is not None and created < cutoff:
+                removed += len(task.runs)
+                session.delete(task)
         return removed
 
     # -- boucle -------------------------------------------------------------

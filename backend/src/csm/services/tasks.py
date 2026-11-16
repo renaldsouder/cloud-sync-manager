@@ -47,6 +47,7 @@ def validate_local_path(
     local_path: str,
     direction: str,
     task_id: str | None = None,
+    check_overlap: bool = True,
 ) -> Path:
     """Résout et contrôle le chemin local.
 
@@ -72,7 +73,8 @@ def validate_local_path(
     elif not resolved.exists():
         raise TaskError(f"{resolved} n'existe pas")
 
-    _refuse_overlap(session, resolved, task_id)
+    if check_overlap:
+        _refuse_overlap(session, resolved, task_id)
     return resolved
 
 
@@ -112,7 +114,9 @@ def _performance_or_refuse(payload: dict | None) -> dict | None:
 def _refuse_overlap(session: Session, resolved: Path, task_id: str | None) -> None:
     """Deux tâches aux chemins locaux imbriqués peuvent se renvoyer des
     suppressions indéfiniment (§8.6, P13)."""
-    statement = select(Task)
+    # Une copie ponctuelle ne supprime jamais rien : elle ne peut pas entrer
+    # dans le renvoi de suppressions que cette règle empêche (SYNC-008).
+    statement = select(Task).where(Task.one_shot.is_(False))
     if task_id:
         statement = statement.where(Task.id != task_id)
     for other in session.scalars(statement).all():
@@ -121,6 +125,67 @@ def _refuse_overlap(session: Session, resolved: Path, task_id: str | None) -> No
                 f"le chemin local recoupe celui de la tâche « {other.name} » "
                 f"({other.local_path})"
             )
+
+
+def create_one_shot(
+    session: Session,
+    settings: Settings,
+    *,
+    remote_id: str,
+    local_path: str,
+    remote_path: str,
+    direction: str,
+    now: datetime | None = None,
+) -> Task:
+    """Copie ponctuelle (SYNC-008) : une Copie, exécutée une fois.
+
+    Toujours le mode Copie, et c'est le sens même du ticket : une opération
+    lancée en passant, sans la relire comme on relit une tâche permanente,
+    ne doit jamais pouvoir supprimer quoi que ce soit. Les chemins sont
+    contrôlés exactement comme pour une tâche (LOCAL-005, P13).
+    """
+    if direction not in DIRECTIONS:
+        raise TaskError(f"sens inconnu : {direction}")
+    remote = session.get(Remote, remote_id)
+    if remote is None:
+        raise TaskError("stockage introuvable")
+
+    resolved = validate_local_path(
+        session,
+        settings,
+        local_path=local_path,
+        direction=direction,
+        check_overlap=False,
+    )
+    try:
+        normalised_remote = to_remote_path(remote_path)
+    except PathNotAllowed as exc:
+        raise TaskError(str(exc)) from exc
+
+    moment = (now or datetime.now().astimezone()).strftime("%d/%m/%Y %H:%M:%S")
+    name = f"Copie ponctuelle du {moment}"
+    suffix = 2
+    while session.scalar(select(Task).where(Task.name == name)):
+        name = f"Copie ponctuelle du {moment} ({suffix})"
+        suffix += 1
+
+    task = Task(
+        name=name,
+        remote_id=remote_id,
+        local_path=str(resolved),
+        remote_path=normalised_remote,
+        direction=direction,
+        mode="copy",
+        delete_policy="never",
+        dry_run_required=False,
+        one_shot=True,
+        # Jamais prise en compte par le planificateur.
+        enabled=False,
+        status="ready",
+    )
+    session.add(task)
+    session.flush()
+    return task
 
 
 def create_task(
@@ -226,6 +291,12 @@ def update_task(
     quarantine_enabled: bool | None = None,
     now: datetime | None = None,
 ) -> Task:
+    if task.one_shot:
+        raise TaskError(
+            "une copie ponctuelle ne se modifie pas : relancez-en une nouvelle, "
+            "ou créez une tâche permanente"
+        )
+
     if name and name != task.name:
         if session.scalar(select(Task).where(Task.name == name, Task.id != task.id)):
             raise TaskError(f"une tâche nommée « {name} » existe déjà")

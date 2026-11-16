@@ -154,13 +154,22 @@ def delete_remote(
     session: Session, store: RcloneConfigStore, remote: Remote
 ) -> None:
     linked = session.scalar(
-        select(Task).where(Task.remote_id == remote.id).limit(1)
+        select(Task)
+        .where(Task.remote_id == remote.id, Task.one_shot.is_(False))
+        .limit(1)
     )
     if linked is not None:
         raise RemoteError(
             f"« {remote.name} » est utilisé par la tâche « {linked.name} » : "
             "supprimez d'abord la tâche"
         )
+    # Les copies ponctuelles ne retiennent pas un stockage : elles partent
+    # avec lui, historique compris (SYNC-008).
+    for one_shot in session.scalars(
+        select(Task).where(Task.remote_id == remote.id, Task.one_shot.is_(True))
+    ).all():
+        session.delete(one_shot)
+    session.flush()
     store.remove_section(remote.rclone_remote_name)
     session.delete(remote)
     session.flush()

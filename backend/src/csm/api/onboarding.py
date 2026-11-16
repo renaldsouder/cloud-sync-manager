@@ -54,7 +54,7 @@ def read_onboarding(
     request: Request, session: Session = Depends(get_session)
 ) -> OnboardingOut:
     remotes = list(session.scalars(select(Remote)).all())
-    tasks = list(session.scalars(select(Task)).all())
+    tasks = list(session.scalars(select(Task).where(Task.one_shot.is_(False))).all())
 
     simulation = session.scalar(
         select(TaskRun.id)
