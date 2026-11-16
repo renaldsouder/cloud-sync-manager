@@ -44,6 +44,7 @@ from csm.services.tasks import MODES
 from csm.services import notifications, performance, settings_store
 from csm.services.filters import FilterError, compile_filters, parse_rules
 from csm.services.guards import DeletionPlan, GuardBlocked
+from csm.services.schedule import Schedule, ScheduleError
 
 logger = logging.getLogger("csm.runner")
 
@@ -830,6 +831,16 @@ class RunManager:
             task = session.get(Task, task_id)
             if task is None or not task.enabled or task.last_run_id != failed_run_id:
                 logger.info("nouvelle tentative abandonnée pour %s", task_id)
+                return
+            local = datetime.now(timezone.utc).astimezone()
+            try:
+                quiet = Schedule.parse(task.schedule_json).is_quiet(local)
+            except ScheduleError:
+                quiet = False
+            if quiet:
+                # PLAN-005 — la fenêtre d'exclusion vaut aussi pour les
+                # tentatives ; la planification reprendra à sa fin.
+                logger.info("nouvelle tentative abandonnée : fenêtre d'exclusion")
                 return
         finally:
             session.close()

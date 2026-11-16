@@ -265,10 +265,14 @@ export type PendingRetry = {
 };
 
 export type Schedule = {
-  kind: "manual" | "interval" | "daily" | "weekly";
+  kind: "manual" | "interval" | "daily" | "weekly" | "cron";
   minutes?: number;
   time?: string;
   days?: number[];
+  /** Expression cron à cinq champs (PLAN-004, mode avancé). */
+  cron?: string;
+  /** Fenêtre d'exclusion (PLAN-005), heure du serveur. */
+  quiet?: { start: string; end: string };
   catch_up: "skip" | "once";
 };
 

@@ -203,8 +203,10 @@ configuration, the logs and the applied filter sets.
 
 - **Directions** — Local → Cloud and Cloud → Local
 - **Modes** — Copy (never deletes) and Mirror (guarded, see above)
-- **Scheduling** — every N minutes, daily at a fixed time, or chosen weekdays.
-  No cron expression. Explicit catch-up policy after a server restart.
+- **Scheduling** — every N minutes, daily at a fixed time, or chosen weekdays,
+  without ever writing a cron expression; an advanced mode accepts one for those
+  who know it. A time window can be excluded (no start during office hours, for
+  instance). Explicit catch-up policy after a server restart.
 - **Filters** — ordered include/exclude rules by path, extension, name pattern,
   hidden files and size, with a preview tool that shows which rule decided
 - **Retries** — after an error rclone itself calls temporary (network drop,
