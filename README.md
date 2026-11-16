@@ -222,6 +222,9 @@ configuration, the logs and the applied filter sets.
 - **Per-file detail** — open a run to see every file transferred, deleted,
   skipped or in error, searchable by path. A truncated list says so, loudly:
   not finding a file there never means it was not handled.
+- **Diagnostics** — a file to attach to a help request (Settings → Diagnostic):
+  versions, settings, task state and recent errors. Never any credential; names,
+  folders and files anonymised by default
 - **Notifications** — Unraid's built-in API and a generic webhook
 - **Backup** — export and restore the configuration, credentials excluded by
   design; restored tasks arrive paused
