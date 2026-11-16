@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from csm.api.schemas import (
     ProviderOut,
     RemoteCreate,
     RemoteOut,
+    RemoteReauthorizeIn,
     RemoteTestOut,
     RemoteUpdate,
 )
@@ -229,6 +230,37 @@ def complete_remote(
     except service.RemoteError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return {"options": found}
+
+
+@router.post("/remotes/{remote_id}/reauthorize")
+def reauthorize_remote(
+    remote_id: str,
+    payload: RemoteReauthorizeIn,
+    request: Request,
+    session: Session = Depends(get_session),
+    store: RcloneConfigStore = Depends(get_store),
+) -> dict:
+    """Remplace le jeton OAuth d'un stockage, sans toucher au reste."""
+    remote = _get_remote(session, remote_id)
+    runner = getattr(request.app.state, "run_manager", None)
+    running = {
+        task.id
+        for task in session.scalars(select(Task).where(Task.remote_id == remote.id)).all()
+        if runner is not None and runner.is_running(task.id)
+    }
+    try:
+        rearmed = service.reauthorize(
+            session,
+            store,
+            remote,
+            token=payload.token,
+            drive_id=payload.drive_id,
+            drive_type=payload.drive_type,
+            running_task_ids=running,
+        )
+    except service.RemoteError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return {"simulation_required": rearmed}
 
 
 @router.post("/remotes/{remote_id}/test", response_model=RemoteTestOut)

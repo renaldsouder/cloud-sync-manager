@@ -269,6 +269,80 @@ def complete_onedrive(
     return found
 
 
+def reauthorize(
+    session: Session,
+    store: RcloneConfigStore,
+    remote: Remote,
+    *,
+    token: str,
+    drive_id: str | None = None,
+    drive_type: str | None = None,
+    running_task_ids: frozenset[str] | set[str] = frozenset(),
+) -> list[str]:
+    """Remplace le jeton OAuth d'un stockage existant.
+
+    Un jeton expiré ou révoqué ne doit pas obliger à recréer le stockage
+    puis toutes les tâches qui s'en servent. Seul le jeton change : les
+    autres réglages, et le nom de section que les tâches référencent,
+    restent en place.
+
+    Le risque propre à ce geste : se reconnecter **avec un autre compte**.
+    Les tâches pointeraient alors silencieusement vers d'autres données, et
+    un Miroir Cloud → Local y verrait une source différente. D'où :
+
+    - pour OneDrive, un disque différent de celui enregistré est refusé ;
+    - pour tous, chaque tâche destructive (Miroir, Bidirectionnel) qui
+      utilise ce stockage redevient soumise à une simulation (§8.1).
+
+    Rend les noms des tâches dont la simulation est réarmée.
+    """
+    from csm.services import oauth
+
+    if remote.provider not in provider_catalog.OAUTH_PROVIDERS:
+        raise RemoteError("ce stockage ne s'autorise pas par OAuth")
+    if not store.has_section(remote.rclone_remote_name):
+        raise RemoteError("configuration introuvable pour ce stockage")
+    try:
+        oauth.access_token_of(token)
+    except oauth.OAuthError as exc:
+        raise RemoteError(str(exc)) from exc
+
+    tasks = list(session.scalars(select(Task).where(Task.remote_id == remote.id)).all())
+    if any(task.id in running_task_ids for task in tasks):
+        # rclone réécrit le jeton rafraîchi dans la configuration en fin
+        # d'exécution : il effacerait celui qu'on vient d'enregistrer.
+        raise RemoteError(
+            "une tâche utilise ce stockage en ce moment ; attendez qu'elle "
+            "se termine avant de ré-autoriser"
+        )
+
+    section = dict(store.read()[remote.rclone_remote_name])
+    if remote.provider == "onedrive":
+        stored = section.get("drive_id", "")
+        if drive_id and stored and drive_id != stored:
+            raise RemoteError(
+                "ce compte Microsoft donne accès à un autre disque OneDrive que "
+                "celui de ce stockage. Reconnectez-vous avec le même compte, ou "
+                "créez un nouveau stockage pour cet autre compte."
+            )
+        if drive_id and not stored:
+            section["drive_id"] = drive_id
+            if drive_type:
+                section["drive_type"] = drive_type
+
+    section["token"] = token
+    store.upsert_section(remote.rclone_remote_name, section)
+    remote.status = "unknown"
+
+    rearmed: list[str] = []
+    for task in tasks:
+        if task.mode != "copy" and not task.dry_run_required:
+            task.dry_run_required = True
+            rearmed.append(task.name)
+    session.flush()
+    return rearmed
+
+
 def describe_options(
     adapter: RcloneAdapter, store: RcloneConfigStore, remote: Remote
 ) -> dict[str, str]:

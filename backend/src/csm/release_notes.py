@@ -36,6 +36,9 @@ RELEASES: list[dict[str, Any]] = [
             "simultanés, limite de bande passante, y compris selon l'heure.",
             "Planification : plage horaire exclue, et expression cron en mode "
             "avancé.",
+            "Stockages : bouton « Ré-autoriser » quand le jeton Google Drive, "
+            "OneDrive ou Dropbox a expiré, sans recréer le stockage ni les "
+            "tâches. Un Miroir qui l'utilise devra de nouveau être simulé.",
             "Copie ponctuelle, dans l'onglet Tâches : copier un dossier une "
             "fois, sans créer de tâche. Toujours une Copie, jamais de "
             "suppression.",

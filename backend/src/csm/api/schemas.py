@@ -49,6 +49,16 @@ class RemoteUpdate(BaseModel):
     options: dict[str, str] | None = None
 
 
+class RemoteReauthorizeIn(BaseModel):
+    """Nouveau jeton OAuth, tel que rendu par ``/api/oauth/complete``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1)
+    drive_id: str | None = None
+    drive_type: str | None = None
+
+
 class RemoteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

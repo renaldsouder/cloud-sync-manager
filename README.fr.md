@@ -168,6 +168,12 @@ Le jeton est renseigné automatiquement. Pour OneDrive, `drive_id` et
 > la configuration** qui réinterroge Microsoft. Inutile de refaire
 > l'autorisation.
 
+> **Quand un jeton expire ou est révoqué** (`401`, `invalid_grant`), cliquez
+> sur **Ré-autoriser** sur le stockage et reconnectez-vous **avec le même
+> compte**. Seul le jeton est remplacé, les tâches restent en place. Une
+> connexion OneDrive qui mène à un autre disque est refusée, et chaque Miroir
+> ou Bidirectionnel qui utilise ce stockage devra de nouveau être simulé.
+
 Supprimer ce dernier copier-coller supposerait d'enregistrer notre propre
 application OAuth chez chaque fournisseur, avec le domaine public et le
 processus de validation que cela implique. Un collage reste aujourd'hui le
