@@ -248,6 +248,7 @@ class RcloneAdapter:
         backup_dir: str | None = None,
         filter_file: str | None = None,
         log_level: str = "INFO",
+        checksum: bool = False,
         extra: list[str] | None = None,
     ) -> list[str]:
         """Construit la ligne de commande d'un transfert.
@@ -281,6 +282,10 @@ class RcloneAdapter:
             arguments += ["--checkers", str(checkers)]
         if bwlimit:
             arguments += ["--bwlimit", bwlimit]
+        if checksum:
+            # SYNC-005 — l'appelant a vérifié qu'un algorithme est commun aux
+            # deux côtés : sans lui, rclone comparerait par taille seule.
+            arguments.append("--checksum")
         if backup_dir:
             arguments += ["--backup-dir", backup_dir]
         if filter_file:
@@ -431,6 +436,19 @@ class RcloneAdapter:
         ``guards.is_quarantine_path``).
         """
         self._run_checked(["purge", path], timeout=timeout)
+
+    def features(self, fs: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
+        """Capacités déclarées d'un système de fichiers (§9.3).
+
+        ``Hashes`` liste les sommes de contrôle que le backend sait fournir,
+        ``Precision`` la granularité de ses dates de modification, en
+        nanosecondes. Ce que rclone *déclare*, pas ce qu'on a vérifié : c'est
+        suffisant pour refuser une option qui ne pourrait pas fonctionner.
+        """
+        payload = self._run_json(["backend", "features", fs], timeout=timeout)
+        if not isinstance(payload, dict):
+            raise RcloneError("réponse rclone illisible")
+        return payload
 
     def about(self, remote: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | None:
         """Quotas du stockage. ``None`` si le backend ne sait pas répondre.

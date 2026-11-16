@@ -45,6 +45,11 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
     String(task.max_delete_percent ?? 0),
   );
   const [quarantine, setQuarantine] = useState(task.quarantine_enabled);
+  const reglages = task.bandwidth ?? {};
+  const [transfers, setTransfers] = useState(String(reglages.transfers ?? ""));
+  const [checkers, setCheckers] = useState(String(reglages.checkers ?? ""));
+  const [limit, setLimit] = useState(reglages.limit ?? "");
+  const [checksum, setChecksum] = useState(Boolean(reglages.checksum));
 
   const [filterSets, setFilterSets] = useState<FilterSet[]>([]);
   const [parcourt, setParcourt] = useState(false);
@@ -79,6 +84,13 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
         max_deletes: Number(maxDeletes) || 0,
         max_delete_percent: Number(maxPercent) || 0,
         quarantine_enabled: quarantine,
+        // Un champ vide rend la main au réglage par défaut de rclone.
+        bandwidth: {
+          ...(transfers.trim() ? { transfers: Number(transfers) } : {}),
+          ...(checkers.trim() ? { checkers: Number(checkers) } : {}),
+          ...(limit.trim() ? { limit: limit.trim() } : {}),
+          ...(checksum ? { checksum: true } : {}),
+        },
       });
       onSaved();
     } catch (cause: unknown) {
@@ -235,6 +247,71 @@ export default function TaskEditor({ task, onSaved, onCancel }: Props) {
           </label>
         </>
       )}
+
+      <details className="advanced" open={Boolean(task.bandwidth)}>
+        <summary className="advanced__summary">Réglages de transfert</summary>
+
+        <div className="advanced__grid">
+          <label className="field">
+            <span className="field__label">Transferts simultanés</span>
+            <input
+              type="number"
+              min={1}
+              max={64}
+              placeholder="4 (défaut)"
+              value={transfers}
+              onChange={(event) => setTransfers(event.target.value)}
+            />
+          </label>
+
+          <label className="field">
+            <span className="field__label">Vérifications simultanées</span>
+            <input
+              type="number"
+              min={1}
+              max={64}
+              placeholder="8 (défaut)"
+              value={checkers}
+              onChange={(event) => setCheckers(event.target.value)}
+            />
+          </label>
+        </div>
+
+        <label className="field">
+          <span className="field__label">Limite de bande passante</span>
+          <input
+            value={limit}
+            placeholder="aucune"
+            onChange={(event) => setLimit(event.target.value)}
+          />
+          <span className="field__help">
+            Par seconde : <code>10M</code> pour 10&nbsp;Mo/s, <code>500k</code>{" "}
+            pour 500&nbsp;Ko/s. <code>2M:1M</code> limite l'envoi à 2&nbsp;Mo/s
+            et la réception à 1&nbsp;Mo/s.
+          </span>
+        </label>
+
+        {task.mode !== "bisync" && (
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={checksum}
+              onChange={(event) => setChecksum(event.target.checked)}
+            />
+            Comparer les fichiers par somme de contrôle
+          </label>
+        )}
+        {task.mode !== "bisync" && (
+          <span className="field__help">
+            Par défaut, un fichier est recopié quand sa taille ou sa date
+            changent. La somme de contrôle détecte aussi un contenu modifié
+            sans changement de taille ni de date, au prix d'une relecture
+            complète des fichiers à chaque exécution. Si le stockage ne fournit
+            aucune somme de contrôle commune, l'exécution revient à la taille et
+            à la date, et l'indique dans son historique.
+          </span>
+        )}
+      </details>
 
       {corbeilleRetiree && (
         <p className="state state--error">

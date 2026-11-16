@@ -225,6 +225,11 @@ rclone, les journaux et les jeux de filtres appliqués.
   5, 15 puis 45 minutes. Chaque tentative rejoue tous les garde-fous ; une
   simulation, un bidirectionnel ou une suppression confirmée ne sont jamais
   rejoués d'eux-mêmes. Une seule notification, si la dernière échoue.
+- **Réglages de transfert** — par tâche : transferts et vérifications
+  simultanés, limite de bande passante (montante et descendante), et
+  comparaison par somme de contrôle. Celle-ci n'est appliquée que si les deux
+  côtés partagent un algorithme ; sinon rclone ne comparerait plus que la
+  taille, et l'exécution revient à la taille et à la date en le signalant.
 - **Progression en direct** — fichier courant, débit, temps restant, en SSE
 - **Historique** — résultat, code de sortie, fichiers transférés et supprimés,
   version de rclone, avec rétention configurable
