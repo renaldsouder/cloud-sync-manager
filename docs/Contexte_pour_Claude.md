@@ -4,7 +4,8 @@
 > ce qu'une conversation neuve doit savoir pour être utile sur ce projet sans
 > avoir le code sous la main.
 >
-> À jour au **15 octobre 2026**, version **0.3.0** (tag `v0.3.0`).
+> À jour au **17 novembre 2026**, version **0.4.0** (le §4 décrit la 0.3.0 ; la
+> 0.4.0 est résumée à sa suite).
 
 ---
 
@@ -122,6 +123,23 @@ fiables, limitation de débit, cohérence différée, granularité des dates de
 modification, casse des noms. Ce sont exactement les conditions pour lesquelles
 les règles de *fail closed* existent — et elles n'ont pas encore été rencontrées
 en vrai.
+
+### Ce que la 0.4.0 ajoute
+
+Nouvelle tentative après une erreur temporaire, sauf autorisation expirée et
+quota atteint, qui alertent aussitôt ; comparaison par somme de contrôle ;
+réglages de transfert et bande passante selon l'heure ; plusieurs heures de
+déclenchement par jour, plage exclue, cron en mode avancé ; pause et
+réactivation d'une tâche ; ré-autorisation OAuth ; copie ponctuelle ; package
+de diagnostic anonymisé ; FAQ de dépannage et procédure de sauvegarde de
+l'appdata ; notes de version dans l'interface ; thème clair/sombre ; canaux
+Stable et Bêta ; indication de ce que chaque fournisseur conserve d'un fichier
+supprimé ou remplacé ; interface utilisable sur téléphone. Tests dédiés aux
+dates, aux noms difficiles, aux gros volumes, aux interruptions et aux pannes
+(réseau, redémarrage, quota, autorisation).
+
+Le tableau « ce qui n'est pas prouvé » ci-dessus reste valable tel quel : rien
+de tout cela n'a été confronté à un nouveau fournisseur réel.
 
 ---
 

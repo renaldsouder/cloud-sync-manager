@@ -16,6 +16,7 @@ import {
   runTask,
   stopRun,
   subscribeToRuns,
+  updateTask,
   type LiveRun,
   type Run,
   type Task,
@@ -338,7 +339,15 @@ export default function TasksView({ bidirectional = false }: Props) {
 
               <p className="path">
                 <span className="chip">{task.schedule_label}</span>
-                {task.next_run_at && (
+                {!task.enabled && (
+                  // TASK-002 — affiché d'après ``enabled`` et non d'après le
+                  // statut : une exécution manuelle pendant la pause remplace
+                  // le statut par son résultat, la pause, elle, demeure.
+                  <span className="chip chip--warning">
+                    en pause : aucune exécution automatique
+                  </span>
+                )}
+                {task.enabled && task.next_run_at && (
                   <span className="chip">prochaine : {formatDate(task.next_run_at)}</span>
                 )}
                 {task.retry && !running && (
@@ -478,6 +487,17 @@ export default function TasksView({ bidirectional = false }: Props) {
                     onClick={() => setPlanning(planning === task.id ? null : task.id)}
                   >
                     {planning === task.id ? "Fermer" : "Planifier"}
+                  </button>
+                )}
+                {!running && (task.schedule || !task.enabled) && (
+                  <button
+                    type="button"
+                    className="btn btn--small btn--ghost"
+                    onClick={() =>
+                      void act(() => updateTask(task.id, { enabled: !task.enabled }))
+                    }
+                  >
+                    {task.enabled ? "Mettre en pause" : "Réactiver"}
                   </button>
                 )}
                 {!running && (

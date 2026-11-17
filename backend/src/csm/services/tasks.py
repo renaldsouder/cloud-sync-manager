@@ -350,8 +350,18 @@ def update_task(
         task.enabled = enabled
         if not enabled:
             task.status = "paused"
-        elif task.status == "paused":
-            task.status = "scheduled" if task.schedule_json else "ready"
+        else:
+            if task.status == "paused":
+                task.status = "scheduled" if task.schedule_json else "ready"
+            # TASK-002 — l'échéance conservée pendant la pause est passée :
+            # la garder ferait partir la tâche au battement qui suit la
+            # réactivation, comme un rattrapage que personne n'a demandé. On
+            # repart de la prochaine occurrence.
+            from csm.services.scheduler import local_now
+
+            task.next_run_at = next_occurrence(
+                Schedule.parse(task.schedule_json), now or local_now()
+            )
 
     session.flush()
     return task

@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from csm.db.models import Task, TaskRun
 from csm.services.scheduler import Scheduler, local_now
-from tests.test_tasks_api import make_cloud, make_task, wait_for
+from tests.test_tasks_api import make_cloud, make_task, start, wait_for
 
 pytestmark = pytest.mark.usefixtures("rclone_path")
 
@@ -111,6 +111,45 @@ def test_a_disabled_task_is_never_started(
     clock = FakeClock(local_now())
     clock.advance(hours=5)
     assert build_scheduler(client, clock).tick() == []
+
+
+def test_resuming_after_a_missed_deadline_does_not_start_at_once(
+    client: TestClient, tmp_path: Path, local_root: Path
+) -> None:
+    """TASK-002 — réactiver une tâche mise en pause des heures plus tôt ne
+    doit pas la faire partir au battement suivant, comme un rattrapage que
+    personne n'a demandé."""
+    task = prepare(client, tmp_path, local_root, kind="interval", minutes=60)
+    client.patch(f"/api/tasks/{task['id']}", json={"enabled": False})
+
+    session = client.app.state.session_factory()
+    try:
+        stored = session.get(Task, task["id"])
+        stored.next_run_at = local_now() - timedelta(hours=3)
+        session.commit()
+    finally:
+        session.close()
+
+    resumed = client.patch(f"/api/tasks/{task['id']}", json={"enabled": True}).json()
+    assert resumed["enabled"] is True
+    assert resumed["status"] == "scheduled"
+    assert datetime.fromisoformat(resumed["next_run_at"]) > local_now()
+
+    assert build_scheduler(client, FakeClock(local_now())).tick() == []
+
+
+def test_a_paused_task_can_still_be_run_by_hand(
+    client: TestClient, tmp_path: Path, local_root: Path
+) -> None:
+    """La pause arrête les déclenchements automatiques, pas l'utilisateur."""
+    task = prepare(client, tmp_path, local_root, kind="interval", minutes=60)
+    client.patch(f"/api/tasks/{task['id']}", json={"enabled": False})
+
+    run = wait_for(client, start(client, task["id"], dry_run=False))
+    assert run["status"] == "success"
+
+    after = client.get("/api/tasks").json()[0]
+    assert after["enabled"] is False, "une exécution manuelle ne lève pas la pause"
 
 
 def test_an_overrunning_task_does_not_stack(

@@ -24,8 +24,11 @@ def test_releases_are_well_formed_and_newest_first() -> None:
     if unreleased:
         assert RELEASES[0] is unreleased[0], "le bloc à paraître vient en tête"
 
-    def key(version: str) -> tuple[int, ...]:
-        return tuple(int(part) for part in version.split("."))
+    def key(version: str) -> tuple[tuple[int, ...], int]:
+        # UPDATE-003 — une pré-version (« 0.5.0-beta.1 ») précède la stable
+        # de même numéro.
+        base, _, pre = version.partition("-")
+        return tuple(int(part) for part in base.split(".")), 0 if pre else 1
 
     versions = [release["version"] for release in published]
     assert versions == sorted(versions, key=key, reverse=True)

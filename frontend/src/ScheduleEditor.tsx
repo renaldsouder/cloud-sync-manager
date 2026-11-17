@@ -18,6 +18,9 @@ const DAYS: [number, string][] = [
   [7, "D"],
 ];
 
+/** Même borne que le serveur (PLAN-003) : au-delà, un intervalle convient mieux. */
+const MAX_TIMES = 12;
+
 /**
  * Planification sans cron (PLAN-002, PLAN-003, §11).
  *
@@ -29,7 +32,9 @@ export default function ScheduleEditor({ task, onSaved, onCancel }: Props) {
   const current = task.schedule;
   const [kind, setKind] = useState<Schedule["kind"]>(current?.kind ?? "manual");
   const [minutes, setMinutes] = useState(String(current?.minutes ?? 60));
-  const [at, setAt] = useState(current?.time ?? "02:30");
+  const [times, setTimes] = useState<string[]>(
+    current?.times ?? [current?.time ?? "02:30"],
+  );
   const [days, setDays] = useState<number[]>(current?.days ?? [1, 2, 3, 4, 5]);
   const [catchUp, setCatchUp] = useState<Schedule["catch_up"]>(current?.catch_up ?? "skip");
   const [cron, setCron] = useState(current?.cron ?? "30 2 * * *");
@@ -52,7 +57,11 @@ export default function ScheduleEditor({ task, onSaved, onCancel }: Props) {
     setError(null);
     const schedule: Schedule = { kind, catch_up: catchUp };
     if (kind === "interval") schedule.minutes = Number(minutes);
-    if (kind === "daily" || kind === "weekly") schedule.time = at;
+    if (kind === "daily" || kind === "weekly") {
+      const distinctes = [...new Set(times.filter(Boolean))].sort();
+      schedule.time = distinctes[0];
+      if (distinctes.length > 1) schedule.times = distinctes;
+    }
     if (kind === "weekly") schedule.days = days;
     if (kind === "cron") schedule.cron = cron.trim();
     if (kind !== "manual" && quiet) schedule.quiet = { start: quietStart, end: quietEnd };
@@ -105,13 +114,49 @@ export default function ScheduleEditor({ task, onSaved, onCancel }: Props) {
       )}
 
       {(kind === "daily" || kind === "weekly") && (
-        <label className="field">
-          <span className="field__label">Heure</span>
-          <input type="time" value={at} onChange={(event) => setAt(event.target.value)} />
-          <span className="field__help">
-            Heure locale du serveur, telle que l'affiche Unraid.
+        <div className="field">
+          <span className="field__label">
+            {times.length > 1 ? "Heures" : "Heure"}
           </span>
-        </label>
+          {times.map((value, index) => (
+            <div className="times__row" key={index}>
+              <input
+                type="time"
+                aria-label={`Heure ${index + 1}`}
+                value={value}
+                onChange={(event) =>
+                  setTimes((previous) =>
+                    previous.map((item, i) => (i === index ? event.target.value : item)),
+                  )
+                }
+              />
+              {times.length > 1 && (
+                <button
+                  type="button"
+                  className="btn btn--small btn--ghost"
+                  onClick={() =>
+                    setTimes((previous) => previous.filter((_, i) => i !== index))
+                  }
+                >
+                  Retirer
+                </button>
+              )}
+            </div>
+          ))}
+          {times.length < MAX_TIMES && (
+            <button
+              type="button"
+              className="chip chip--button"
+              onClick={() => setTimes((previous) => [...previous, "12:00"])}
+            >
+              Ajouter une heure
+            </button>
+          )}
+          <span className="field__help">
+            Heure locale du serveur, telle que l'affiche Unraid. Plusieurs heures
+            font partir la tâche à chacune d'elles, les jours retenus.
+          </span>
+        </div>
       )}
 
       {kind === "weekly" && (

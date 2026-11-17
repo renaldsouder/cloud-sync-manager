@@ -1,6 +1,6 @@
 # Installation et exploitation sous Unraid
 
-Documentation de support (UNRAID-004, AIDE-001, AIDE-002).
+Documentation de support (UNRAID-004, AIDE-001, AIDE-002, AIDE-004, UPDATE-003).
 
 ---
 
@@ -68,6 +68,19 @@ jamais réaffiché ensuite, ni inclus dans une sauvegarde de configuration.
 réellement. Une connexion réussie ne garantit pas que toutes les opérations
 sont supportées par le fournisseur.
 
+### Ce que le fournisseur garde de lui-même
+
+Chaque stockage indique, dans l'onglet **Stockages Cloud**, si le fournisseur
+conserve un fichier supprimé ou remplacé par une tâche : corbeille de Google
+Drive et de OneDrive, historique de versions de Dropbox, versions cachées de
+Backblaze B2. L'indication suit la configuration réelle du stockage — une
+option `use_trash` désactivée ou `hard_delete` activée la change. Pour S3,
+tout dépend du versioning du bucket, que l'application ne voit pas ; pour un
+fournisseur qu'elle ne connaît pas, elle ne promet rien.
+
+C'est un filet de plus, jamais un motif d'en retirer un : la simulation, les
+seuils et la corbeille de l'application s'appliquent à l'identique.
+
 ---
 
 ## 3. Comprendre les modes
@@ -134,8 +147,15 @@ l'interface sans toucher aux tâches qui l'utilisent.
 
 ## 5. Planification
 
-Aucune expression cron à écrire : intervalle régulier, heure fixe quotidienne,
-ou jours de la semaine choisis. Les heures suivent le fuseau `TZ` du conteneur.
+Aucune expression cron à écrire : intervalle régulier, une ou plusieurs heures
+fixes chaque jour (jusqu'à douze), ou les mêmes heures certains jours de la
+semaine seulement. Les heures suivent le fuseau `TZ` du conteneur. Une
+expression cron reste possible en mode avancé.
+
+**Pause.** Une tâche planifiée peut être mise en pause depuis l'onglet
+Tâches : plus aucune exécution automatique, mais un lancement manuel reste
+possible. À la réactivation, elle repart de la prochaine échéance, sans
+rattraper celles qui sont tombées pendant la pause.
 
 **Rattrapage.** Si le serveur était éteint au moment d'une échéance, rien n'est
 rejoué par défaut : la tâche repart à l'occurrence suivante. Vous pouvez
@@ -231,7 +251,8 @@ chemins et réauthentifiez les stockages avant de les réactiver — un serveur 
 destination dont les shares diffèrent ne doit pas déclencher une
 synchronisation destructive au premier battement.
 
-Avant toute mise à jour majeure, sauvegardez aussi le dossier appdata.
+L'export ne suffit pas avant une mise à jour majeure : il faut aussi une copie
+du dossier appdata, conteneur arrêté. Voir [§11.2](#112-sauvegarder-et-restaurer-lappdata).
 
 ---
 
@@ -309,3 +330,98 @@ en HTTP simple, sans chiffrement : le mot de passe circulerait en clair.
 Pour un accès distant, placez-la derrière un reverse proxy HTTPS — SWAG ou
 Nginx Proxy Manager — qui portera le certificat. Le mot de passe de
 l'application vient alors en complément du chiffrement, pas à sa place.
+
+---
+
+## 11. Mises à jour
+
+### 11.1 Canal Stable et canal Bêta
+
+Le canal se choisit par l'**étiquette de l'image**, dans le champ
+*Repository* du conteneur (Docker → Edit) :
+
+| Repository | Canal | Ce que vous recevez |
+|---|---|---|
+| `ghcr.io/renaldsouder/cloud-sync-manager:latest` | **Stable** (défaut) | Les versions publiées, rien d'autre |
+| `ghcr.io/renaldsouder/cloud-sync-manager:beta` | **Bêta** | Chaque pré-version (`0.5.0-beta.1`…) **et** chaque stable |
+| `ghcr.io/renaldsouder/cloud-sync-manager:0.4.0` | Figé | Cette version, jusqu'à ce que vous changiez l'étiquette |
+
+Le canal Bêta est réservé aux volontaires qui acceptent d'éprouver une version
+avant les autres : une pré-version peut contenir un défaut qu'aucun test n'a
+vu. L'application le rappelle par la mention **canal Bêta** à côté de son
+numéro de version, sur chaque écran. Ne confiez à une pré-version que des
+données dont vous avez une sauvegarde indépendante.
+
+**Revenir de Bêta à Stable** n'est pas un simple changement d'étiquette. Une
+pré-version peut avoir fait évoluer la base de configuration ; une version
+plus ancienne ne sait pas la relire, et refuse alors de démarrer plutôt que
+de deviner. La seule voie sûre est la restauration décrite ci-dessous, avec la
+copie de l'appdata prise **avant** de passer en Bêta.
+
+L'application ne contacte aucun serveur pour savoir si une version plus
+récente existe : c'est Unraid qui le signale, dans l'onglet Docker, comme pour
+n'importe quel conteneur.
+
+### 11.2 Sauvegarder et restaurer l'appdata
+
+L'appdata (`/mnt/user/appdata/cloud-sync-manager` par défaut) contient tout
+l'état de l'application :
+
+| Élément | Contenu |
+|---|---|
+| `db/cloudsyncmanager.sqlite` | Stockages, tâches, historique, réglages |
+| `rclone.conf` | Identifiants et jetons des stockages Cloud — **secret** |
+| `session.key` | Clé des sessions de l'interface — **secret** |
+| `filters/`, `bisync/` | Filtres compilés, état du bidirectionnel |
+| `logs/` | Journaux |
+
+L'export JSON du §8 n'en contient qu'une partie, sans aucun identifiant. Avant
+une mise à jour majeure, un changement de canal ou une intervention sur le
+serveur, prenez une copie complète.
+
+**Sauvegarder**
+
+1. Attendez qu'aucune tâche ne soit **En cours**, ou arrêtez-la depuis
+   l'onglet Tâches. Une exécution coupée par l'arrêt du conteneur finit
+   *Interrompue*, jamais *Réussie*, mais autant ne pas en provoquer.
+2. Notez la version affichée en haut de l'interface : c'est elle qu'il faudra
+   remettre en cas de retour arrière.
+3. Arrêtez le conteneur (Docker → Stop). **Ne copiez jamais la base conteneur
+   démarré** : SQLite écrit en continu, une copie prise à chaud peut être
+   incohérente sans que rien ne le signale.
+4. Copiez le dossier entier, par exemple depuis le terminal d'Unraid :
+
+   ```bash
+   cp -a /mnt/user/appdata/cloud-sync-manager \
+         /mnt/user/backups/cloud-sync-manager-$(date +%Y-%m-%d)
+   ```
+
+   Le plugin *Appdata Backup* convient aussi, à condition qu'il arrête le
+   conteneur pendant la copie (c'est son comportement par défaut).
+5. Redémarrez le conteneur. Rangez la copie comme un secret : elle contient
+   `rclone.conf`, donc l'accès à vos comptes Cloud. Ne la publiez jamais, ne
+   la joignez à aucune demande d'aide — le fichier de **Paramètres →
+   Diagnostic** est fait pour ça.
+
+**Restaurer**
+
+1. Arrêtez le conteneur.
+2. Si la copie a été prise sous une version antérieure, remettez cette
+   version : remplacez l'étiquette du champ *Repository* par le numéro noté
+   (`…/cloud-sync-manager:0.3.0`, par exemple). Une base restaurée et une
+   image plus récente se réconcilient d'elles-mêmes au démarrage ; une base
+   plus récente et une image plus ancienne, non.
+3. **Renommez** le dossier appdata actuel plutôt que de le supprimer
+   (`cloud-sync-manager.ecarte`), puis remettez la copie à sa place sous le
+   nom d'origine. Gardez le dossier écarté tant que la restauration n'est pas
+   vérifiée.
+4. Démarrez le conteneur et vérifiez l'onglet **État** : base et rclone au
+   vert.
+5. Avant de relancer quoi que ce soit, **simulez chaque Miroir**. Les
+   dossiers ont changé depuis la copie ; c'est la simulation qui montre ce
+   que la tâche ferait aujourd'hui. Pour un **Bidirectionnel**, l'état
+   restauré décrit les deux côtés tels qu'ils étaient au moment de la copie :
+   relancez une ré-initialisation, simulée d'abord, plutôt qu'une exécution
+   normale.
+6. Une fois tout vérifié, supprimez le dossier écarté.
+

@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from csm.db.models import Remote
+from csm.rclone.versioning import describe_versioning
 from csm.services.schedule import Schedule, describe
 
 
@@ -71,6 +72,9 @@ class RemoteOut(BaseModel):
     capabilities: dict[str, Any] | None = None
     task_count: int = 0
     options: dict[str, str] = Field(default_factory=dict)
+    #: Ce que le fournisseur garde d'un fichier supprimé ou remplacé
+    #: (CONF-005). Information seulement : aucune protection n'en dépend.
+    versioning: dict[str, Any] | None = None
 
     @classmethod
     def build(
@@ -96,6 +100,7 @@ class RemoteOut(BaseModel):
             capabilities=capabilities,
             task_count=task_count,
             options=options or {},
+            versioning=describe_versioning(remote.provider, options),
         )
 
 

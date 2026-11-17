@@ -11,6 +11,7 @@ import {
   testRemote,
   type Remote,
   type RemoteTest,
+  type Versioning,
 } from "./api";
 
 /** Fournisseurs dont l'accès passe par un jeton OAuth (CLOUD-003). */
@@ -158,6 +159,8 @@ export default function RemotesView() {
                 ))}
               </dl>
 
+              {remote.versioning && <Versions versioning={remote.versioning} />}
+
               {result && (
                 <p className={`state ${result.ok ? "" : "state--error"}`}>
                   {result.detail} · {result.elapsed_ms} ms
@@ -250,6 +253,29 @@ export default function RemotesView() {
  * disponible, quand le fournisseur sait le dire, et les sommes de contrôle
  * qui rendent possible la comparaison par contenu (SYNC-005).
  */
+const DEVENIR: Record<Versioning["deleted"], string> = {
+  kept: "récupérable chez le fournisseur",
+  permanent: "non conservé par le fournisseur",
+  unknown: "inconnu",
+};
+
+/**
+ * Filet du fournisseur (CONF-005). Présenté comme un complément : la
+ * corbeille de l'application et les seuils s'appliquent dans tous les cas,
+ * et l'interface ne doit jamais laisser croire le contraire.
+ */
+function Versions({ versioning }: { versioning: Versioning }) {
+  return (
+    <p className="state">
+      <strong>Chez le fournisseur</strong> — fichier supprimé :{" "}
+      {DEVENIR[versioning.deleted]} ; fichier remplacé :{" "}
+      {DEVENIR[versioning.replaced]}. {versioning.detail} Un complément
+      seulement : la corbeille de l'application et les seuils de suppression
+      restent appliqués.
+    </p>
+  );
+}
+
 function Capacites({ capabilities }: { capabilities: Record<string, unknown> }) {
   const quota = capabilities.quota as
     | { used?: number; free?: number; total?: number }

@@ -9,6 +9,8 @@ export type Check = {
 export type Health = {
   status: "ok" | "degraded";
   version: string;
+  /** Canal de publication (UPDATE-003) : « beta » pour une pré-version. */
+  channel?: "stable" | "beta";
   checks: Record<string, Check>;
   /** Fonctions réellement ouvertes par le serveur. */
   features?: { bidirectional?: boolean };
@@ -69,6 +71,14 @@ export type Remote = {
   capabilities: Record<string, unknown> | null;
   task_count: number;
   options: Record<string, string>;
+  /** Ce que le fournisseur garde d'un fichier supprimé ou remplacé (CONF-005). */
+  versioning?: Versioning | null;
+};
+
+export type Versioning = {
+  deleted: "kept" | "permanent" | "unknown";
+  replaced: "kept" | "permanent" | "unknown";
+  detail: string;
 };
 
 export type RemoteTest = {
@@ -279,6 +289,8 @@ export type Schedule = {
   kind: "manual" | "interval" | "daily" | "weekly" | "cron";
   minutes?: number;
   time?: string;
+  /** Plusieurs heures par jour (PLAN-003) ; ``time`` en reprend la première. */
+  times?: string[];
   days?: number[];
   /** Expression cron à cinq champs (PLAN-004, mode avancé). */
   cron?: string;
