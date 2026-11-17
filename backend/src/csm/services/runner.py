@@ -68,6 +68,55 @@ SUPPORTED_MODES = frozenset({"copy", "mirror"})
 #: boucle masquerait la panne au lieu de la signaler.
 TRANSIENT_EXIT_CODES = frozenset({5})
 
+#: Causes d'échec qu'aucune attente ne corrige (GLOBAL-006), reconnues dans
+#: les messages d'erreur de rclone, en minuscules. rclone peut les rapporter
+#: avec le code 5 — un 401 ou un 507 reste une réponse HTTP — mais relancer
+#: une autorisation expirée ou un espace plein trois fois de suite ne ferait
+#: que retarder l'alerte qui, elle, permet d'agir. Des marqueurs techniques
+#: plutôt que des mots courants : un message d'erreur cite souvent un nom de
+#: fichier, et « token expiré.txt » ne doit rien déclencher.
+AUTH_FAILURE_MARKERS: tuple[str, ...] = (
+    "invalid_grant",
+    "couldn't fetch token",
+    "cannot fetch token",
+    "expired_access_token",
+    "invalid_access_token",
+    "401 unauthorized",
+    "status code 401",
+    "invalidauthenticationtoken",
+)
+QUOTA_FAILURE_MARKERS: tuple[str, ...] = (
+    "storagequotaexceeded",
+    "quota exceeded",
+    "quotaexceeded",
+    "quota_exceeded",
+    "insufficient_space",
+    "insufficient storage",
+    "insufficientstorage",
+    "no space left on device",
+)
+
+#: Ce que l'utilisateur doit faire, selon la cause reconnue.
+FAILURE_ADVICE = {
+    "auth": (
+        "l'autorisation du stockage a expiré ou a été révoquée : onglet "
+        "Stockages Cloud, « Ré-autoriser »"
+    ),
+    "quota": "l'espace du stockage distant est plein : libérez-en ou changez d'offre",
+}
+
+
+def failure_cause(message: str | None) -> str | None:
+    """« auth », « quota », ou ``None`` si l'erreur n'est pas reconnue."""
+    if not message:
+        return None
+    lowered = message.lower()
+    if any(marker in lowered for marker in AUTH_FAILURE_MARKERS):
+        return "auth"
+    if any(marker in lowered for marker in QUOTA_FAILURE_MARKERS):
+        return "quota"
+    return None
+
 #: Modes éligibles à la nouvelle tentative automatique. Le bidirectionnel en
 #: est exclu tant qu'aucun fournisseur réel n'a été validé pour ce mode
 #: (§8.6, §20.4) : après un échec, bisync peut exiger une ré-initialisation,
@@ -208,6 +257,8 @@ class LiveRun:
         }
     )
     last_error: str | None = None
+    #: Première cause d'échec reconnue (GLOBAL-006) : « auth » ou « quota ».
+    failure_cause: str | None = None
     blocked_reason: str | None = None
     deletion_plan: DeletionPlan | None = None
 
@@ -291,11 +342,16 @@ def _describe_delay(seconds: float) -> str:
 
 
 def _with_attempts(live: LiveRun) -> str | None:
-    """Détail de notification, complété du nombre de tentatives épuisées."""
+    """Détail de notification, complété du nombre de tentatives épuisées
+    et, si la cause est reconnue, de ce qu'il faut faire (GLOBAL-006)."""
+    detail = live.last_error
     if live.attempt and live.status == "error":
         suffix = f"échec après {live.attempt + 1} tentatives"
-        return f"{live.last_error} — {suffix}" if live.last_error else suffix
-    return live.last_error
+        detail = f"{detail} — {suffix}" if detail else suffix
+    advice = FAILURE_ADVICE.get(live.failure_cause or "")
+    if advice and live.status == "error":
+        detail = f"{advice}. {detail}" if detail else advice
+    return detail
 
 
 def endpoints(task: Task, remote: Remote) -> tuple[str, str]:
@@ -767,6 +823,10 @@ class RunManager:
         """
         if live.cancelled or exit_code not in TRANSIENT_EXIT_CODES:
             return None
+        if live.failure_cause is not None:
+            # GLOBAL-006 — autorisation expirée, espace plein : attendre ne
+            # corrige rien, l'utilisateur doit être prévenu tout de suite.
+            return None
         if live.attempt >= len(self._retry_delays):
             return None
         with self._lock:
@@ -1104,6 +1164,8 @@ class RunManager:
         elif event.kind == rclone_events.ERROR:
             live.counters["errors"] += 1
             live.last_error = redact(event.message)
+            if live.failure_cause is None:
+                live.failure_cause = failure_cause(event.message)
         elif live.log_level not in settings_store.NARRATED_LEVELS:
             # Déroulé interne de rclone : les phases, les vérifications, les
             # renommages mécaniques. Sans intérêt tant que tout va bien, et
@@ -1149,6 +1211,10 @@ class RunManager:
         event = notifications.event_for(status)
         if event is None:
             return
+        if status == "error" and live.failure_cause == "auth":
+            # GLOBAL-006 — l'événement « Authentification expirée » existait
+            # dans les réglages sans jamais être émis.
+            event = notifications.AUTH
 
         session = self._session_factory()
         try:
