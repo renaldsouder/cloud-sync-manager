@@ -18,8 +18,8 @@ from typing import Any
 
 RELEASES: list[dict[str, Any]] = [
     {
-        "version": None,
-        "date": None,
+        "version": "0.4.0",
+        "date": "2026-11-17",
         "important": [
             "Après une erreur temporaire (coupure réseau, fournisseur "
             "indisponible), une tâche repart d'elle-même après 5, 15 puis "
@@ -27,8 +27,28 @@ RELEASES: list[dict[str, Any]] = [
             "simulation, une suppression confirmée et le bidirectionnel ne "
             "sont jamais relancés d'eux-mêmes. Réglable ou désactivable avec "
             "CSM_RETRY_DELAYS_MINUTES.",
+            "Une autorisation expirée ou un espace distant plein ne sont pas "
+            "relancés : l'alerte part aussitôt, avec ce qu'il faut faire. "
+            "L'alerte « Authentification expirée » des notifications est "
+            "désormais réellement envoyée.",
+            "Avant une mise à jour majeure ou un passage au canal Bêta, "
+            "copiez le dossier appdata conteneur arrêté : la marche à suivre "
+            "est dans l'Aide, « Avant une mise à jour majeure ».",
         ],
         "highlights": [
+            "Mettre en pause et réactiver une tâche planifiée depuis l'onglet "
+            "Tâches. À la réactivation, elle repart de la prochaine échéance, "
+            "sans rattraper la pause.",
+            "Planification : plusieurs heures de déclenchement par jour, "
+            "tous les jours ou certains jours seulement, sans écrire de cron.",
+            "Stockages : ce que le fournisseur garde d'un fichier supprimé ou "
+            "remplacé (corbeille, versions), d'après la configuration réelle "
+            "du stockage. Un complément : la corbeille de l'application reste "
+            "appliquée.",
+            "Paramètres → Apparence : thème clair, sombre ou automatique.",
+            "Canal Bêta pour les volontaires : étiquette d'image « beta » au "
+            "lieu de « latest ». Une pré-version est signalée sur chaque "
+            "écran.",
             "Comparaison par somme de contrôle, pour détecter un fichier "
             "modifié sans changement de taille ni de date. Appliquée seulement "
             "si les deux côtés partagent un algorithme.",
