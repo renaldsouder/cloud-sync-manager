@@ -259,3 +259,70 @@ def test_an_import_drops_an_unreadable_schedule(client, tmp_path, local_root, se
         assert any("planification ignorée" in w for w in report["warnings"])
     with TestClient(create_app(fresh)) as again:
         assert again.get("/api/tasks").json()[0]["schedule"] is None
+
+
+# -- plusieurs heures par jour (PLAN-003) ------------------------------------
+
+
+def test_several_times_a_day_pick_the_next_one_today() -> None:
+    schedule = Schedule.from_dict({"kind": "daily", "times": ["18:00", "08:00", "12:00"]})
+    assert schedule.times == (time(8), time(12), time(18))
+    assert next_occurrence(schedule, NOW) == NOW.replace(hour=18)
+
+
+def test_several_times_a_day_wrap_to_the_first_one_tomorrow() -> None:
+    schedule = Schedule.from_dict({"kind": "daily", "times": ["08:00", "12:00"]})
+    assert next_occurrence(schedule, NOW) == (NOW + timedelta(days=1)).replace(hour=8)
+
+
+def test_several_times_on_chosen_days() -> None:
+    """Mercredi 14:00, lundi et vendredi à 07:00 et 19:00 : vendredi 07:00."""
+    schedule = Schedule.from_dict(
+        {"kind": "weekly", "days": [1, 5], "times": ["19:00", "07:00"]}
+    )
+    first = next_occurrence(schedule, NOW)
+    assert (first.isoweekday(), first.hour) == (5, 7)
+    second = next_occurrence(schedule, NOW, after=first)
+    assert (second.isoweekday(), second.hour) == (5, 19)
+    third = next_occurrence(schedule, NOW, after=second)
+    assert (third.isoweekday(), third.hour) == (1, 7)
+
+
+def test_an_exact_deadline_is_not_rerun() -> None:
+    schedule = Schedule.from_dict({"kind": "daily", "times": ["14:00", "20:00"]})
+    assert next_occurrence(schedule, NOW) == NOW.replace(hour=20)
+
+
+def test_several_times_roundtrip_and_stay_readable_by_older_versions() -> None:
+    original = Schedule.from_dict({"kind": "daily", "times": ["12:00", "08:00", "08:00"]})
+    payload = original.to_dict()
+    assert payload["times"] == ["08:00", "12:00"], "triées, sans doublon"
+    assert payload["time"] == "08:00", "une version antérieure lit la première heure"
+    assert Schedule.parse(original.to_json()) == original
+
+
+def test_a_single_time_is_written_as_before() -> None:
+    payload = Schedule.from_dict({"kind": "daily", "times": ["02:30"]}).to_dict()
+    assert payload["time"] == "02:30"
+    assert "times" not in payload
+
+
+def test_several_times_are_described() -> None:
+    schedule = Schedule.from_dict(
+        {"kind": "weekly", "days": [1, 5], "times": ["08:00", "12:00", "18:00"]}
+    )
+    assert describe(schedule) == "lundi, vendredi à 08:00, 12:00 et 18:00"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"kind": "daily", "times": []},
+        {"kind": "daily", "times": "08:00"},
+        {"kind": "daily", "times": ["08:00", "26:00"]},
+        {"kind": "daily", "times": [f"{hour:02d}:00" for hour in range(13)]},
+    ],
+)
+def test_invalid_time_lists_are_refused(payload: dict) -> None:
+    with pytest.raises(ScheduleError):
+        Schedule.from_dict(payload)

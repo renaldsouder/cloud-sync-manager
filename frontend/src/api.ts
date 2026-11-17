@@ -279,6 +279,8 @@ export type Schedule = {
   kind: "manual" | "interval" | "daily" | "weekly" | "cron";
   minutes?: number;
   time?: string;
+  /** Plusieurs heures par jour (PLAN-003) ; ``time`` en reprend la première. */
+  times?: string[];
   days?: number[];
   /** Expression cron à cinq champs (PLAN-004, mode avancé). */
   cron?: string;

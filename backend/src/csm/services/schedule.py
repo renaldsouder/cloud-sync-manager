@@ -1,4 +1,4 @@
-"""Règles de planification (PLAN-001 → PLAN-003, §11).
+"""Règles de planification (PLAN-001 → PLAN-005, §11).
 
 Le §11 est explicite : le parcours standard ne doit pas demander d'écrire une
 expression cron. On décrit donc une planification par ce que l'utilisateur a
@@ -43,7 +43,10 @@ class ScheduleError(ValueError):
 class Schedule:
     kind: str = MANUAL
     minutes: int | None = None
-    at: time | None = None
+    #: Heures de déclenchement, triées et sans doublon (PLAN-003) : une
+    #: tâche quotidienne ou hebdomadaire peut partir plusieurs fois par jour
+    #: — 08:00, 12:00 et 18:00 — sans passer par une expression cron.
+    times: tuple[time, ...] = ()
     #: Jours ISO : 1 = lundi … 7 = dimanche.
     days: tuple[int, ...] = ()
     catch_up: str = SKIP
@@ -58,6 +61,11 @@ class Schedule:
     @property
     def automatic(self) -> bool:
         return self.kind != MANUAL
+
+    @property
+    def at(self) -> time | None:
+        """Première heure de la journée — l'unique, le plus souvent."""
+        return self.times[0] if self.times else None
 
     # -- sérialisation ------------------------------------------------------
 
@@ -89,9 +97,9 @@ class Schedule:
         else:
             minutes = None
 
-        at = _parse_time(payload.get("time")) if kind in {DAILY, WEEKLY} else None
-        if kind in {DAILY, WEEKLY} and at is None:
-            raise ScheduleError("une heure de déclenchement est nécessaire")
+        times: tuple[time, ...] = ()
+        if kind in {DAILY, WEEKLY}:
+            times = _parse_times(payload)
 
         days: tuple[int, ...] = ()
         if kind == WEEKLY:
@@ -126,7 +134,7 @@ class Schedule:
         return cls(
             kind=kind,
             minutes=minutes,
-            at=at,
+            times=times,
             days=days,
             catch_up=catch_up,
             cron=cron,
@@ -138,8 +146,14 @@ class Schedule:
         payload: dict = {"kind": self.kind, "catch_up": self.catch_up}
         if self.minutes is not None:
             payload["minutes"] = self.minutes
-        if self.at is not None:
-            payload["time"] = self.at.strftime("%H:%M")
+        if self.times:
+            # ``time`` reste écrit seul quand il n'y a qu'une heure : une
+            # planification enregistrée avant PLAN-003 se relit à l'identique,
+            # et une sauvegarde exportée reste lisible par une version
+            # antérieure tant qu'elle n'utilise pas plusieurs heures.
+            payload["time"] = self.times[0].strftime("%H:%M")
+            if len(self.times) > 1:
+                payload["times"] = [moment.strftime("%H:%M") for moment in self.times]
         if self.days:
             payload["days"] = list(self.days)
         if self.cron:
@@ -189,6 +203,35 @@ def _parse_time(value: object) -> time | None:
         raise ScheduleError(f"heure invalide : {value!r}") from exc
 
 
+#: Au-delà, une planification « plusieurs heures par jour » devient un
+#: intervalle mal déguisé : le mode « toutes les N minutes » est fait pour ça.
+MAX_TIMES = 12
+
+
+def _parse_times(payload: dict) -> tuple[time, ...]:
+    raw = payload.get("times")
+    if raw is None:
+        single = _parse_time(payload.get("time"))
+        if single is None:
+            raise ScheduleError("une heure de déclenchement est nécessaire")
+        return (single,)
+    if not isinstance(raw, list) or not raw:
+        raise ScheduleError("indiquez au moins une heure de déclenchement")
+    parsed = []
+    for value in raw:
+        moment = _parse_time(value)
+        if moment is None:
+            raise ScheduleError(f"heure invalide : {value!r}")
+        parsed.append(moment)
+    times = tuple(sorted(set(parsed)))
+    if len(times) > MAX_TIMES:
+        raise ScheduleError(
+            f"au plus {MAX_TIMES} heures par jour : au-delà, choisissez "
+            "« à intervalle régulier »"
+        )
+    return times
+
+
 def _parse_day(value: object) -> int:
     try:
         day = int(value)  # type: ignore[arg-type]
@@ -226,21 +269,18 @@ def _raw_occurrence(schedule: Schedule, reference: datetime) -> datetime | None:
         assert schedule.cron is not None
         return CronExpression.parse(schedule.cron).next_after(reference)
 
-    assert schedule.at is not None
-    candidate = reference.replace(
-        hour=schedule.at.hour, minute=schedule.at.minute, second=0, microsecond=0
-    )
-    if candidate <= reference:
-        candidate += timedelta(days=1)
-
-    if schedule.kind == DAILY:
-        return candidate
-
-    # Hebdomadaire : on avance jour par jour jusqu'au premier jour retenu.
-    for _ in range(8):
-        if candidate.isoweekday() in schedule.days:
-            return candidate
-        candidate += timedelta(days=1)
+    assert schedule.times
+    day = reference.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Huit jours suffisent : le jour de référence, plus une semaine complète
+    # pour retrouver le premier jour retenu d'une planification hebdomadaire.
+    for offset in range(9):
+        current = day + timedelta(days=offset)
+        if schedule.kind == WEEKLY and current.isoweekday() not in schedule.days:
+            continue
+        for moment in schedule.times:
+            candidate = current.replace(hour=moment.hour, minute=moment.minute)
+            if candidate > reference:
+                return candidate
     return None  # pragma: no cover - impossible, days n'est jamais vide
 
 
@@ -295,14 +335,20 @@ def _describe_kind(schedule: Schedule) -> str:
             return f"toutes les {hours} heure{'s' if hours > 1 else ''}"
         return f"toutes les {minutes} minutes"
 
-    assert schedule.at is not None
-    moment = schedule.at.strftime("%H:%M")
+    assert schedule.times
+    moment = _join([moment.strftime("%H:%M") for moment in schedule.times])
     if schedule.kind == DAILY:
         return f"tous les jours à {moment}"
 
     names = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
     selected = ", ".join(names[day - 1] for day in schedule.days)
     return f"{selected} à {moment}"
+
+
+def _join(items: list[str]) -> str:
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + " et " + items[-1]
 
 
 # -- expression cron (PLAN-004) ----------------------------------------------
