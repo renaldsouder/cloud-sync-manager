@@ -253,6 +253,13 @@ export function AideTache() {
           <strong>Lancez</strong>, puis <strong>Planifiez</strong> une fois le
           résultat conforme.
         </li>
+        <li>
+          Une tâche planifiée peut être <strong>mise en pause</strong> : plus
+          aucune exécution automatique, jusqu'à ce que vous la{" "}
+          <strong>réactiviez</strong>. Elle repart alors de la prochaine
+          échéance, sans rattraper celles de la pause. Un lancement manuel
+          reste possible pendant la pause.
+        </li>
       </ol>
     </div>
   );
