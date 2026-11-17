@@ -11,14 +11,29 @@
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/* UI-006 — « Automatique » (aucun data-theme) suit le système ; un choix
+   explicite l'emporte dans les deux sens. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #14161a;
     --surface: #1c1f25;
     --line: #2c313a;
     --ink: #e8eaee;
     --ink-soft: #9aa3b0;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #14161a;
+  --surface: #1c1f25;
+  --line: #2c313a;
+  --ink: #e8eaee;
+  --ink-soft: #9aa3b0;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * {
@@ -1010,6 +1025,13 @@ body {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+.times__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
 }
 
 /* --- Filtres ------------------------------------------------------------- */

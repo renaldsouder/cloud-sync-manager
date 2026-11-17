@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import FiltersPanel from "./FiltersPanel";
 import PasswordPanel from "./PasswordPanel";
+import { readTheme, saveTheme, type Theme } from "./theme";
 import {
   exportConfig,
   fetchAuthSession,
@@ -301,6 +302,8 @@ export default function SettingsView() {
 
       <FiltersPanel />
 
+      <AppearancePanel />
+
       <section className="card">
         <h2>Diagnostic</h2>
         <p className="state">
@@ -368,5 +371,46 @@ export default function SettingsView() {
         </div>
       </section>
     </>
+  );
+}
+
+/** Thème de l'interface (UI-006), propre à ce navigateur. */
+function AppearancePanel() {
+  const [theme, setTheme] = useState<Theme>(readTheme);
+
+  function choose(value: Theme) {
+    setTheme(value);
+    saveTheme(value);
+  }
+
+  return (
+    <section className="card">
+      <h2>Apparence</h2>
+      <fieldset className="choices">
+        <legend className="field__label">Thème</legend>
+        {(
+          [
+            ["auto", "Automatique — comme le système ou le navigateur"],
+            ["light", "Clair"],
+            ["dark", "Sombre"],
+          ] as [Theme, string][]
+        ).map(([value, label]) => (
+          <label className="choice" key={value}>
+            <input
+              type="radio"
+              name="theme"
+              checked={theme === value}
+              onChange={() => choose(value)}
+            />
+            <span>{label}</span>
+          </label>
+        ))}
+      </fieldset>
+      <p className="state">
+        Mémorisé dans ce navigateur seulement. L'interface s'ouvre dans son
+        propre onglet et ne peut pas lire le thème choisi dans Unraid :
+        choisissez le même ici, ou laissez « Automatique ».
+      </p>
+    </section>
   );
 }
