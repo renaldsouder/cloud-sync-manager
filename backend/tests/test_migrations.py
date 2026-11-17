@@ -156,3 +156,25 @@ def test_0003_can_be_rolled_back(tmp_path: Path) -> None:
     assert "one_shot" not in _task_columns(db_path)
     upgrade_to_head(url)
     assert "one_shot" in _task_columns(db_path)
+
+
+def test_a_database_from_a_newer_version_is_refused(tmp_path: Path) -> None:
+    """AIDE-004, UPDATE-003 — revenir à une image plus ancienne sans
+    restaurer l'appdata laisse une base migrée par une version plus récente.
+    Le démarrage doit échouer plutôt que de travailler sur un schéma qu'il ne
+    connaît pas : c'est ce que la procédure de restauration documente."""
+    import pytest
+    from alembic.util.exc import CommandError
+    from sqlalchemy import text
+
+    db = tmp_path / "csm.sqlite"
+    upgrade_to_head(sqlite_url(db))
+    engine = create_engine(sqlite_url(db))
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE alembic_version SET version_num = '9999_futur'"))
+    finally:
+        engine.dispose()
+
+    with pytest.raises(CommandError):
+        upgrade_to_head(sqlite_url(db))

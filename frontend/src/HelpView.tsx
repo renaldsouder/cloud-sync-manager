@@ -376,6 +376,55 @@ export function AideDepannage() {
   );
 }
 
+/**
+ * Sauvegarde et restauration de l'appdata (AIDE-004).
+ *
+ * La version complète, avec les commandes, est dans
+ * docs/Installation_Unraid.md §11.2 ; ici, ce qu'il faut avoir en tête au
+ * moment de cliquer sur « Update » dans Unraid.
+ */
+export function AideSauvegardeAppdata() {
+  return (
+    <div className="aide">
+      <p>
+        L'export de <strong>Paramètres → Sauvegarde de la configuration</strong> ne contient aucun
+        identifiant. Avant une mise à jour majeure ou un passage au canal Bêta,
+        copiez aussi le dossier appdata entier
+        (<code>/mnt/user/appdata/cloud-sync-manager</code>) :
+      </p>
+      <ol>
+        <li>Attendez qu'aucune tâche ne soit en cours.</li>
+        <li>
+          Notez la version affichée en haut de cette page : c'est elle qu'il
+          faudra remettre en cas de retour arrière.
+        </li>
+        <li>
+          <strong>Arrêtez le conteneur</strong>, puis copiez le dossier. Une
+          base copiée conteneur démarré peut être incohérente sans que rien ne
+          le signale.
+        </li>
+        <li>
+          Rangez la copie comme un secret : elle contient les jetons de vos
+          stockages Cloud.
+        </li>
+      </ol>
+      <p>
+        <strong>Pour restaurer</strong> : conteneur arrêté, remettez la version
+        notée dans le champ <em>Repository</em>, renommez le dossier actuel
+        plutôt que de le supprimer, replacez la copie, puis démarrez.{" "}
+        <strong>Simulez chaque Miroir</strong> avant de le relancer, et
+        ré-initialisez chaque Bidirectionnel : les dossiers ont changé depuis
+        la copie.
+      </p>
+      <p>
+        Une version plus ancienne refuse de démarrer sur une base mise à jour
+        par une version plus récente : c'est voulu. Restaurez alors la copie
+        prise avant la mise à jour.
+      </p>
+    </div>
+  );
+}
+
 export default function HelpView({ bidirectional = false }: Props) {
   return (
     <>
@@ -402,6 +451,11 @@ export default function HelpView({ bidirectional = false }: Props) {
       <section className="card">
         <h2>Dépannage</h2>
         <AideDepannage />
+      </section>
+
+      <section className="card">
+        <h2>Avant une mise à jour majeure</h2>
+        <AideSauvegardeAppdata />
       </section>
 
       <section className="card">
