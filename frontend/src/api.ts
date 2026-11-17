@@ -71,6 +71,14 @@ export type Remote = {
   capabilities: Record<string, unknown> | null;
   task_count: number;
   options: Record<string, string>;
+  /** Ce que le fournisseur garde d'un fichier supprimé ou remplacé (CONF-005). */
+  versioning?: Versioning | null;
+};
+
+export type Versioning = {
+  deleted: "kept" | "permanent" | "unknown";
+  replaced: "kept" | "permanent" | "unknown";
+  detail: string;
 };
 
 export type RemoteTest = {

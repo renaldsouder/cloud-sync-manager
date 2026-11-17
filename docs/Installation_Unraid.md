@@ -68,6 +68,19 @@ jamais réaffiché ensuite, ni inclus dans une sauvegarde de configuration.
 réellement. Une connexion réussie ne garantit pas que toutes les opérations
 sont supportées par le fournisseur.
 
+### Ce que le fournisseur garde de lui-même
+
+Chaque stockage indique, dans l'onglet **Stockages Cloud**, si le fournisseur
+conserve un fichier supprimé ou remplacé par une tâche : corbeille de Google
+Drive et de OneDrive, historique de versions de Dropbox, versions cachées de
+Backblaze B2. L'indication suit la configuration réelle du stockage — une
+option `use_trash` désactivée ou `hard_delete` activée la change. Pour S3,
+tout dépend du versioning du bucket, que l'application ne voit pas ; pour un
+fournisseur qu'elle ne connaît pas, elle ne promet rien.
+
+C'est un filet de plus, jamais un motif d'en retirer un : la simulation, les
+seuils et la corbeille de l'application s'appliquent à l'identique.
+
 ---
 
 ## 3. Comprendre les modes
