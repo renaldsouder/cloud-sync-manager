@@ -53,6 +53,15 @@ Les onze balises exigées par le portail sont présentes : `Name`, `Repository`,
 `Registry`, `Network`, `Shell`, `Privileged`, `Support`, `Project`,
 `Overview`, `Category`, `TemplateURL`.
 
+## Canaux Stable et Bêta (UPDATE-003)
+
+Le template pointe sur `:latest`, le canal **Stable**. Le canal **Bêta** n'a
+pas de template à part : un volontaire remplace `latest` par `beta` dans le
+champ *Repository* de son conteneur. La CI publie `beta` à chaque étiquette
+`v*` — pré-versions (`v0.5.0-beta.1`) comme stables — et `latest` aux seules
+stables. Le retour de Bêta à Stable passe par la restauration de l'appdata
+(docs/Installation_Unraid.md §11).
+
 ## Compatibilité des installations existantes
 
 Le §17 du cahier des charges le rappelle : les réglages d'une application

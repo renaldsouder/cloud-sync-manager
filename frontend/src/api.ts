@@ -9,6 +9,8 @@ export type Check = {
 export type Health = {
   status: "ok" | "degraded";
   version: string;
+  /** Canal de publication (UPDATE-003) : « beta » pour une pré-version. */
+  channel?: "stable" | "beta";
   checks: Record<string, Check>;
   /** Fonctions réellement ouvertes par le serveur. */
   features?: { bidirectional?: boolean };

@@ -20,6 +20,16 @@ from csm.rclone.probe import rclone_version
 router = APIRouter(tags=["health"])
 
 
+def release_channel(version: str) -> str:
+    """Canal de publication d'une version (UPDATE-003).
+
+    Une version de pré-publication porte un suffixe semver — ``0.5.0-beta.1``,
+    ``0.5.0-rc.2`` — et n'est publiée que sous l'étiquette d'image ``beta``.
+    Tout le reste est une version stable, publiée sous ``latest``.
+    """
+    return "beta" if "-" in version else "stable"
+
+
 @router.get("/health")
 def health(request: Request) -> dict[str, Any]:
     checks: dict[str, Any] = {}
@@ -46,6 +56,7 @@ def health(request: Request) -> dict[str, Any]:
     return {
         "status": "ok" if all(c["ok"] for c in checks.values()) else "degraded",
         "version": __version__,
+        "channel": release_channel(__version__),
         "checks": checks,
         # L'interface ne doit pas proposer un mode que le moteur refusera :
         # elle apprend ici ce qui est réellement ouvert (SYNC-003, §21).

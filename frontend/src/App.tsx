@@ -92,6 +92,12 @@ export default function App() {
         </h1>
         <p className="shell__subtitle">
           Synchronisation Cloud pour Unraid{health ? ` — version ${health.version}` : ""}
+          {health?.channel === "beta" && (
+            // UPDATE-003 — une pré-version se signale sur chaque écran : on
+            // ne doit pas l'oublier au point de lui confier des données
+            // sans sauvegarde.
+            <span className="chip chip--warning"> canal Bêta</span>
+          )}
         </p>
         <nav className="tabs">
           {(

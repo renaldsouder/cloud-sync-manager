@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from csm import __version__
+from csm.api.health import release_channel
 
 
 def test_health_reports_database_and_version(client: TestClient) -> None:
@@ -45,3 +46,24 @@ def test_root_explains_missing_frontend(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 503
     assert response.json()["api"] == "/api/docs"
+
+
+# -- canaux de publication (UPDATE-003) --------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("version", "channel"),
+    [
+        ("0.4.0", "stable"),
+        ("1.0.0", "stable"),
+        ("0.5.0-beta.1", "beta"),
+        ("0.5.0-rc.2", "beta"),
+    ],
+)
+def test_the_channel_follows_the_version(version: str, channel: str) -> None:
+    assert release_channel(version) == channel
+
+
+def test_health_reports_the_channel(client: TestClient) -> None:
+    payload = client.get("/api/health").json()
+    assert payload["channel"] == release_channel(__version__)
